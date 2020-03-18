@@ -6,6 +6,7 @@ import time
 import plotly.graph_objs as go
 from plotly.offline import init_notebook_mode, iplot
 
+# calculate M values using a single DD interaction model.
 def M_list_return(time_table, wL_value, AB_list, n_pulse):  
 
     AB_list = np.array(AB_list)
@@ -412,3 +413,15 @@ def return_pred_list(path):
     avg_raw_pred /= len(raw_pred_list)
     avg_deno_pred /= len(deno_pred_list)
     return A_idx_list, avg_raw_pred, avg_deno_pred
+
+# calculate power exponential decay rates for time range 
+def gaussian_slope_px(M_lists: "data of M values", time_table: "time data", time_index: "time index of calculated point", px_mean_value_at_time: "px value at time index"):
+
+    m_value_at_time = (px_mean_value_at_time * 2) - 1
+    Gaussian_co = -time_table[time_index] / np.log(m_value_at_time)
+
+    slope = np.exp(-(time_table / Gaussian_co)**2)
+    slope = slope.reshape(1, len(time_table))
+    M_lists_slope = M_lists * slope
+    px_lists_slope = (M_lists_slope + 1) / 2
+    return px_lists_slope.squeeze(), slope.squeeze()
