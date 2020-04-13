@@ -45,7 +45,7 @@ parser.add_argument('-bmax', required=True, type=int, help='maximum boundary of 
 parser.add_argument('-aint', required=True, type=int, help='initial value of A (Hz). type: int')
 parser.add_argument('-afinal', required=True, type=int, help='final value of A (Hz). type: int')
 parser.add_argument('-arange', required=True, type=int, help='coverage range of a model. type: int')
-parser.add_argument('-astep', required=True, type=int, help='distance between each local period in the range of model. type: int')
+parser.add_argument('-astep', required=True, type=int, help='distance between each model. type: int')
 parser.add_argument('-noise', required=True, type=float, help='maxmum noise value (scale: M value). type: float')
 parser.add_argument('-path', required=True, type=str, help='name of save directory for prediction files. type: float')
 
