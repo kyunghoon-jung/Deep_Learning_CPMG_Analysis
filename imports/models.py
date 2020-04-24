@@ -82,15 +82,15 @@ class Denoise_Model(nn.Module):
     def __init__(self):
         super(Denoise_Model_prev, self).__init__()
         self.conv1d_1 = nn.Conv1d(2, 64, 4, stride=1, padding=2)
-        self.maxpooling = nn.MaxPool1d(2)
         self.bn1 = nn.BatchNorm1d(64)
         self.conv1d_2 = nn.Conv1d(64, 64, 4, stride=1, padding=2)
         self.bn2 = nn.BatchNorm1d(64)
-        self.leakyrelu = nn.LeakyReLU()
         self.conv1d_3 = nn.ConvTranspose1d(64, 64, 4, stride=2, padding=1)
         self.bn3 = nn.BatchNorm1d(64)
         self.conv1d_4 = nn.ConvTranspose1d(64, 2, 4, stride=2, padding=1)
         self.bn4 = nn.BatchNorm1d(2)
+        self.maxpooling = nn.MaxPool1d(2)
+        self.leakyrelu = nn.LeakyReLU()
 
     def forward(self, x):
         x = x.reshape(x.shape[0], 2, -1)
