@@ -4,8 +4,9 @@ import time
 import numpy as np
 from adabound import AdaBound
 import sys
-sys.path.insert(0, "/home/sonic/Coding/Git/CPMG_Analysis/2nd_automation/")
-from decom_utils import pre_processing
+
+def pre_processing(data: 'Px value', power=4):
+    return 1-data**power
 
 class HPC(nn.Module):
     def __init__(self, input_features, out_features): 
