@@ -38,6 +38,10 @@ def get_marginal_arr(arr_data, margin_value, random_type='uni', mean=0, std=1):
 
 # generate target (A,B) candidates with repect to B range from the target AB list(variable: target_AB). 
 def gen_target_wrt_B(target_AB, class_batch, B_resol, B_start, B_num, B_target_gap): 
+    '''
+    This generate target spin lists divided by B range
+    return: numpy array _ shape: (B_num, class_batch, 2)
+    '''
     target_lists = np.zeros((B_num, class_batch, 2)) 
     B_value_lists = np.arange(B_start, B_start+B_resol*B_num, B_resol) 
     for idx, B_temp in enumerate(B_value_lists): 
@@ -171,22 +175,54 @@ def gen_side_AB_candidates(*args):
 
     return total_AB_candidates_side
 
-# generate (A, B) candidates with respect to the above configurations
-def gen_AB_candidates(*args):
+def gen_AB_candidates(is_hierarchical=False, *args):
+    '''
+    This fuction generates (A, B) candidates with respect to keyword arguments listed below.
+
+    AB_lists_dic: set of (A, B) lists grouped w.r.t. the local period. 
+    A_num   : divided number of classes within the range: A_start ~ (A_start - A_resol*A_num) 
+    B_num   : divided number of classes within the range: B_start ~ (B_start - B_resol*B_num)
+    A_start : the initial value of A (Hz) in the target range ( cf) target range means A for [A_start ~ (A_start - A_resol*A_num)], B for [B_start ~ (B_start - B_resol*B_num)] 
+    B_start : the initial value of B (Hz) in the target range 
+    A_resol : the division resolution of A in the target range 
+    B_resol : the division resolution of B in the target range
+    A_side_num   : this determines 'how many (A, B) lists to be selected within the side range
+    A_side_resol : the distance between each side spin in the lists above. 
+    B_side_min   : the minimum B value of side spins
+    B_side_max   : the maximum B value of side spins 
+    B_target_gap : the distance of B value between each divided target range 
+    B_side_gap   : the distance of B value between the same side range and the target range. (this highly affects the accuracy of training) 
+    A_target_margin   : the marginal area of target A value
+    A_side_margin     : the marginal area of side A value
+    A_far_side_margin : the marginal area of far side A value
+    class_batch : batch size per class (=cpu_num_for_multi*batch_for_multi)
+    class_num   : this determines how many classes in a target AB candidates
+    bound_list  : dipicted below
+    spin_zero_scale : this determines how many zero value spins included in (A, B) candidates 
+    A_side_start    : the initial A value of side spins 
+    A_side_end      : the end A value of side spins
+    side_same_num   : the variable determines 'how many spins in the (A, B) spin candidates for the same side spins.
+    side_num        : the variable determines 'how many spins in the (A, B) spin candidates for the side spins.
+    side_candi_num  : this determinces 'how many side spins' would be incldued per sample data.
+    '''
+
     AB_lists_dic, A_num, B_num, A_start, B_start, A_resol, B_resol, A_side_num, A_side_resol, B_side_min, \
     B_side_max, B_target_gap, B_side_gap, A_target_margin, A_side_margin, A_far_side_margin, \
     class_batch, class_num, bound_list, spin_zero_scale,  \
-    A_side_start_margin, A_side_start, A_side_end, side_same_num, side_num, side_candi_num = args
+    A_side_start, A_side_end, side_same_num, side_num, side_candi_num = args
 
     A_idx_list = np.arange(A_start, A_start+A_resol*A_num, A_resol)  # generate A lists for each class
     target_AB_candi = np.zeros((class_num-1, class_batch, 2))
+    hier_target_AB_candi = np.zeros((class_num-1, class_batch*16, 2))
 
     side_same_target_candi = np.zeros((A_idx_list.shape[0], side_same_num, 2))
     for idx, A_idx in enumerate(A_idx_list):
         target_AB = AB_lists_dic[A_idx]
-        target_AB_candi[B_num*idx:B_num*(idx+1)] = gen_target_wrt_B(target_AB, class_batch, B_resol, B_start, B_num, B_target_gap)
+        target_AB_candi[B_num*idx:B_num*(idx+1)] = gen_target_wrt_B(target_AB, class_batch, B_resol, B_start, B_num, B_target_gap) # target A list is divided by B range
         if spin_zero_scale['same'] != 1.:
             side_same_target_candi[idx] = gen_side_same_ABlist(target_AB, side_same_num, B_resol, B_start, B_num, B_side_gap, B_side_max)
+        if is_hierarchical==True:
+            hier_target_AB_candi[B_num*idx:B_num*(idx+1)] = gen_target_wrt_B(target_AB, class_batch*16, B_resol, B_start, B_num, B_target_gap) 
     side_same_target_candi = side_same_target_candi.reshape(-1, side_same_target_candi.shape[-1])
     side_same_target_candi[:,0] = get_marginal_arr(side_same_target_candi[:,0], A_side_margin)
     target_AB_candi[:,:,0] = get_marginal_arr(target_AB_candi[:,:,0], A_target_margin)
@@ -244,74 +280,84 @@ def gen_AB_candidates(*args):
         np.expand_dims(AB_candidates_side_same, -2),
     ), axis=-2) 
 
-    return AB_candidates
+    return AB_candidates, hier_target_AB_candi
 
 # generate model index with respect to the image_width and time index threshold
 def get_model_index(total_indices, A_idx, *, time_thres_idx, image_width):
-    for idx_cut, time_index in enumerate(total_indices[A_idx][1]):
-        if time_index > time_thres_idx:
-            break
-    temp_index = total_indices[A_idx][1][:idx_cut]
-    model_index = np.array([range(k-image_width, k+image_width+1) for k in temp_index])
+    temp_index = total_indices[A_idx][1]
+    model_index = np.array([range(k-image_width, k+image_width+1) for k in temp_index if (((k-image_width)>0) & (k < (time_thres_idx-image_width)))])
     return model_index
 
-# generate (A,B) candidates merging each TPk in 'AB_target_set' variable  
 def gen_TPk_AB_candidates(AB_target_set: "[[A1,B1],[A2,B2],..]", is_hierarchical=False, *args) -> "total_AB_candi, total_Y_train_arr":
+    '''
+    The function generates (A,B) candidates with respect to each TPk of 'AB_target_set' variable.
 
+    bound_list: the divided ratio w.r.t the range of B. This reflects the fact that the number of nuclear spins in diamond
+                becomes bigger as the distance from the NV center gets longer. 
+                --> therefore, the amount spins with smaller B shoulb be much more than larger B.   
+    '''
     AB_lists_dic, N_PULSE, A_num, B_num, A_resol, B_resol, A_side_num, A_side_resol, B_side_min,\
     B_side_max, B_target_gap, B_side_gap, A_target_margin, A_side_margin, A_far_side_margin,\
     class_batch, class_num, spin_zero_scale, distance_btw_target_side, side_candi_num = args
 
     total_AB_candi = np.zeros((class_num, len(AB_target_set)*class_batch, 4+side_candi_num, 2)) 
                     # CAUTION: '3rd dimension' of 'total_AB_candi' is determined by the output of 'gen_AB_candidates' function
-    total_Y_train_arr = np.zeros((class_num, len(AB_target_set)*class_batch, class_num))
+    total_Y_train_arr = np.zeros((class_num, len(AB_target_set)*class_batch, class_num)) # one-hot vector for each class
     
+    total_hier_target_AB_candi = []
     for target_index, [A_start, B_start] in enumerate(AB_target_set):
 
-        if N_PULSE==32:
+        if N_PULSE<=32:
             if B_start<15000:
-                bound_list = np.array([[5000, 4], [11000, 2], [18000, 1], [35000, 1]]) # the first ratio = 10 - all the rest of rates
-                                                                                          # example) 10 - (4+2+1+1) = 2 -> 20%
+                bound_list = np.array([[5000, 4], [11000, 2], [18000, 1], [35000, 1]]) # the 'first' ratio = 10 - all the rest of rates
+                                                                                       # in this case, the 'first' ratio -> 10-(4+2+1+1)=2
+                                                                                       # meaning that (A,B) candidates in the 'first' range will make up for "20%" of the whole cadidates. 
             else:
                 bound_list = np.array([[8000, 3], [15000, 3], [27000, 2.5], [45000, 1]]) 
-        elif N_PULSE==64:
+        elif (32<N_PULSE) & (N_PULSE<=64):
             bound_list = np.array([[7000, 3], [13500, 3], [27000, 2.5], [45000, 1]]) 
-        elif N_PULSE==96:
+        elif (64<N_PULSE) & (N_PULSE<=96):
             bound_list = np.array([[6000, 3], [12000, 3], [27000, 2.5], [45000, 1]]) 
-        elif N_PULSE==256:
+        elif (96<N_PULSE) & (N_PULSE<=128):
+            bound_list = np.array([[4000, 3], [11000, 3], [25000, 2.5], [45000, 1]]) 
+        elif 128<N_PULSE:
             bound_list = np.array([[1500, 4], [7500, 2], [17000, 1], [35000, 1]]) 
         
         if is_hierarchical==True:
             A_side_start_margin = A_target_margin + distance_btw_target_side  # 'distance' between target boundary and side boundary  
             A_side_start = AB_target_set[0][0] - A_side_start_margin                      # 'left' starting point of A side
             A_side_end = AB_target_set[-1][0] + A_resol*(A_num-1) + A_side_start_margin   # 'right' starting point of A side. 'A_start' means the center value of A_class
-            num_of_targets = 3
         else:
             A_side_start_margin = A_target_margin + distance_btw_target_side  
             A_side_start = A_start - A_side_start_margin                      
             A_side_end = A_start + A_resol*(A_num-1) + A_side_start_margin    
-        side_same_num = AB_lists_dic[A_start].shape[0]*10                 #  set 'how many side spins to be chosen' purposely to 10 times larger than AB_list
-        side_num = AB_lists_dic[A_start].shape[0]*10                      #       because we use np.random.randint, which includes 'the same' number. 
+        side_same_num = AB_lists_dic[A_start].shape[0]*10   #  these two variables determine 'how many spins in the (A, B) spin candidates for the same side and side spins.              
+        side_num = AB_lists_dic[A_start].shape[0]*10        #  side_same_num, side_num are intentionally chosen 10 times larger than ABlists for these variables to have enough randomness 
+                                                            #  when generating (A, B) same_side(or side) candidates from these variables.   
 
         args_AB_candi = (AB_lists_dic, A_num, B_num, A_start, B_start, A_resol, B_resol, A_side_num, A_side_resol, B_side_min,
             B_side_max, B_target_gap, B_side_gap, A_target_margin, A_side_margin, A_far_side_margin,
             class_batch, class_num, bound_list, spin_zero_scale, 
-            A_side_start_margin, A_side_start, A_side_end, side_same_num, side_num, side_candi_num)
+            A_side_start, A_side_end, side_same_num, side_num, side_candi_num)
         
-        AB_candidates = gen_AB_candidates(*args_AB_candi)
-        
+        AB_candidates, hier_target_AB_candi = gen_AB_candidates(is_hierarchical, *args_AB_candi)
+        total_hier_target_AB_candi.append(hier_target_AB_candi)
         for total_idx in range(len(AB_candidates)):
             total_AB_candi[total_idx, target_index*class_batch:(target_index+1)*class_batch] = AB_candidates[total_idx]
             total_Y_train_arr[total_idx, target_index*class_batch:(target_index+1)*class_batch, total_idx] = 1
 
-    return total_AB_candi, total_Y_train_arr 
+    return total_AB_candi, total_Y_train_arr, np.array(total_hier_target_AB_candi).squeeze()
 
 # pre-processing of Px value 
 def pre_processing(data: 'Px value', power=4):
     return 1-data**power
 
-# generate M value array batch
-def gen_M_arr_batch(AB_lists_batch, indexing, time_data, WL, PULSE, is_pre_processing=False, pre_process_scale=4, noise_scale=0., spin_bath=0., existing_spins_M=0):
+def gen_M_arr_batch(AB_lists_batch, indexing, time_data, WL, PULSE, is_pre_processing=False, 
+                    pre_process_scale=4, noise_scale=0., spin_bath=0., existing_spins_M=0):
+    '''
+    The function generates M value array batch
+    '''
+
     index_flat = indexing.flatten()
     X_train_arr_batch = np.zeros((len(AB_lists_batch), indexing.shape[0], indexing.shape[1]))
     if type(spin_bath) == float:
@@ -336,7 +382,7 @@ def gen_M_arr_batch(AB_lists_batch, indexing, time_data, WL, PULSE, is_pre_proce
             return 1-X_train_arr_batch*existing_spins_M
 
 # return A value of TPk from the input (A, B) candidate
-def cal_TPk_from_AB(A: 'Hz', B: 'Hz', WL, k=10) -> "A(Hz)":
+def return_TPk_from_AB(A: 'Hz', B: 'Hz', WL, k=10) -> "A(Hz)":
 
     A_temp = int(round(A*0.01)*100)
     A_list = np.arange(A_temp-15000, A_temp+15000, 50)*2*np.pi
@@ -352,16 +398,17 @@ def cal_TPk_from_AB(A: 'Hz', B: 'Hz', WL, k=10) -> "A(Hz)":
     return int(round(A_list[min_idx]/2/np.pi, 0))
 
 # return [A_start, A_end, B_start, B_end] lists for HPC models
-def get_AB_model_lists(A_init, A_final, A_step, A_range, B_init, B_final):
+def get_AB_model_lists(A_init, A_final, A_step: 'A step between models', A_range: 'A range of one model', B_init, B_final):
     A_list1 = np.arange(A_init, A_final+A_step, A_step)
     A_list2 = A_list1 + A_range
     B_list1 = np.full(A_list1.shape, B_init)
     B_list2 = np.full(A_list1.shape, B_final)
     return np.stack((A_list1, A_list2, B_list1, B_list2)).T
 
-# return merged spin lists by merging the existing spins with the reference spins (added margins)     
 def return_existing_spins_wrt_margins(existing_spins, reference_spins, A_existing_margin, B_existing_margin):
-
+    '''
+    This function revises spin lists by merging the existing spins with the reference spins (with adding margins)     
+    '''
     existing_spins = np.repeat(np.expand_dims(existing_spins, axis=0), reference_spins.shape[1], axis=0)
     existing_spins = np.repeat(np.expand_dims(existing_spins, axis=0), reference_spins.shape[0], axis=0)
 
@@ -414,8 +461,19 @@ def return_pred_list(path):
     avg_deno_pred /= len(deno_pred_list)
     return A_idx_list, avg_raw_pred, avg_deno_pred
 
-# calculate power exponential decay rates for time range 
-def gaussian_slope_px(M_lists: "data of M values", time_table: "time data", time_index: "time index of calculated point", px_mean_value_at_time: "px value at time index"):
+# calculate the time of k-th dip of a spin with (A, B) pair. The unit of time (s).
+def return_target_period(A: 'Hz', B: 'Hz', WL, k: 'the position of the dip') -> 'time(s)':
+    A *= 2*np.pi
+    B *= 2*np.pi
+    w_tilda = np.sqrt((A+WL)**2 + B**2)
+    tau = np.pi*(2*k - 1) / (w_tilda + WL)
+    
+    return tau
+
+# calculate the gaussian decay rate(=decoherence effect) for time range. time_index: a time point of "mean value of Px"
+def gaussian_slope_px(M_lists: "data of M values", time_table: "time data", 
+                      time_index: "time index of calculated point", 
+                      px_mean_value_at_time: "px value at time index"):
 
     m_value_at_time = (px_mean_value_at_time * 2) - 1
     Gaussian_co = -time_table[time_index] / np.log(m_value_at_time)
