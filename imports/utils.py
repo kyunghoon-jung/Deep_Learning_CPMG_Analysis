@@ -483,3 +483,15 @@ def gaussian_slope_px(M_lists: "data of M values", time_table: "time data",
     M_lists_slope = M_lists * slope
     px_lists_slope = (M_lists_slope + 1) / 2
     return px_lists_slope.squeeze(), slope.squeeze()
+
+# return 'model_index' excluding time points of dips of the larmor frequency
+def return_index_without_larmor_idx(total_indices, model_index, TIME_RANGE, larmor_image_width):
+    larmor_index = get_model_index(total_indices, 0, time_thres_idx=TIME_RANGE, image_width=larmor_image_width) 
+    larmor_index = larmor_index.flatten() 
+    total_model_indices = list(range(len(model_index)))  
+    for idx, temp_indices in enumerate(model_index):
+        temp = [k for k in temp_indices if k in larmor_index] 
+        if len(temp) > 0:
+            total_model_indices.remove(idx)
+    model_index = model_index[total_model_indices,:]
+    return model_index

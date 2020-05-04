@@ -1,2 +1,0 @@
-*.npy filter=lfs diff=lfs merge=lfs -text
-tutorial_data/AB_TPk_groups.npy filter=lfs diff=lfs merge=lfs -text

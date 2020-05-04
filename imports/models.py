@@ -177,7 +177,7 @@ def model_prediction(model, file_name, target_data, model_index, is_preprocess=F
     return [pred, np.argmax(pred), np.max(pred)] 
 
 def train(MODEL_PATH, N_PULSE, X_train_arr, Y_train_arr, model, hyperparameter_set, criterion, 
-          epochs, valid_batch, valid_mini_batch, exp_data, *, is_pred=False, is_print_results=True, is_preprocess=False, PRE_SCALE=4,
+          epochs, valid_batch, valid_mini_batch, exp_data=0, is_pred=False, is_print_results=False, is_preprocess=False, PRE_SCALE=4,
           model_index=False, exp_data_deno=False):
     start_time = time.time()
     
