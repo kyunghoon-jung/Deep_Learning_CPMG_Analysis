@@ -1,5 +1,5 @@
 # Parameter Usage
 
-##### 1. HPC model
-##### 2. Denoising model
-##### 3. Regression model
+### [1] HPC model</br>
+### [2] Denoising model</br>
+### [3] Regression model</br>
