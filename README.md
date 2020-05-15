@@ -1,6 +1,6 @@
 # Nuclear spin detection via deep learning models
 #### This repository contains the codes in the paper [Paper Link]
-<br>
+
 All datasets is available on request.
 
 #### Tutorials in step by step (Recommended: open in Chrome (Windows) or Safari (Mac) broswer)</br>
