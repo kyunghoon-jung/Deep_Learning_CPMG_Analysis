@@ -3,7 +3,7 @@
 <br>
 All datasets is available on request.
 
-#### Tutorials in step by step (Recommend: open in Chrome (Windows) or Safari (Mac) broswer)</br>
+#### Tutorials in step by step (Recommended: open in Chrome (Windows) or Safari (Mac) broswer)</br>
 
 1. Data handling and generation in the proposed representation [Not yet provided]()</br>
 2. Denoising model (in N32) [Not yet provided]()</br>
