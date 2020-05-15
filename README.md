@@ -6,8 +6,8 @@
 #### Tutorial </br>
 ##### (Recommend: open a link in Chrome (Windows) or Safari (Mac) broswer)</br></br>
 The step by step explanations are provided here. </br>
-##### 1. Data Representation and Generation [Link]</br>
+##### 1. Data Representation and Generation [Link]()</br>
 ##### 2. Denoising model (in N32) [Link](https://colab.research.google.com/drive/15GKtvSyxBE7sBwpjYbXpOwSPL_2vhypF)</br>
-##### 3. HPC models (in N32) [Link]</br>
+##### 3. HPC models (in N32) [Link]()</br>
 ##### 4. HPC models (in N256) [Link]()</br></br>
 If there are any concerns or questions, please contact authors. (khoony.jung@gmail.com)
