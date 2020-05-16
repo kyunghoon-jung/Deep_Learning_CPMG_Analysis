@@ -7,7 +7,7 @@ All datasets is available on request.
 
 1. Data handling and generation in the proposed representation [Link](https://colab.research.google.com/drive/191nB0zGbcZt4i8mWgRwpDsdfDM0Y0gcC?usp=sharing)</br>
 2. Denoising model [Not yet provided]()</br>
-3. HPC and regression models (in N32 CPMG signal) [Link](https://colab.research.google.com/drive/15GKtvSyxBE7sBwpjYbXpOwSPL_2vhypF)</br>
+3. HPC and regression models (in N32 CPMG signal) [Link](https://colab.research.google.com/drive/1InF_4lNOHv7LwHPWHaU5HICKzmEQjF6p?usp=sharing)</br>
 4. HPC and regression models (in N256 CPMG signal) [Not yet provided]()</br>
 </br>
 If there are any concerns or questions, please contact authors. (khoony.jung@gmail.com)
