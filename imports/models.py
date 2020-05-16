@@ -81,25 +81,24 @@ class Fitting_model(nn.Module):
 
 class Denoise_Model(nn.Module):
     def __init__(self):
-        super(Denoise_Model_prev, self).__init__()
+        super(Denoise_Model, self).__init__()
         self.conv1d_1 = nn.Conv1d(2, 64, 4, stride=1, padding=2)
+        self.maxpooling = nn.MaxPool1d(2)
         self.bn1 = nn.BatchNorm1d(64)
         self.conv1d_2 = nn.Conv1d(64, 64, 4, stride=1, padding=2)
         self.bn2 = nn.BatchNorm1d(64)
-        self.conv1d_3 = nn.ConvTranspose1d(64, 64, 4, stride=2, padding=1)
+        self.convTrans1d_3 = nn.ConvTranspose1d(64, 64, 4, stride=2, padding=1)
         self.bn3 = nn.BatchNorm1d(64)
-        self.conv1d_4 = nn.ConvTranspose1d(64, 2, 4, stride=2, padding=1)
-        self.bn4 = nn.BatchNorm1d(2)
-        self.maxpooling = nn.MaxPool1d(2)
+        self.convTrans1d_4 = nn.ConvTranspose1d(64, 2, 4, stride=2, padding=1)
         self.leakyrelu = nn.LeakyReLU()
 
     def forward(self, x):
         x = x.reshape(x.shape[0], 2, -1)
         x = self.bn1(self.maxpooling(self.leakyrelu(self.conv1d_1(x))))
         x = self.bn2(self.maxpooling(self.leakyrelu(self.conv1d_2(x))))
-        x = self.bn3(self.leakyrelu(self.conv1d_3(x)))
-        x = self.leakyrelu(self.conv1d_4(x))
-        return x  
+        x = self.bn3(self.leakyrelu(self.convTrans1d_3(x)))
+        x = self.leakyrelu(self.convTrans1d_4(x))
+        return x   
 
 class HPC_CNN(nn.Module):
     def __init__(self, input_features: "torch.Size", output_features: int):
