@@ -94,9 +94,9 @@ class Denoise_Model(nn.Module):
 
     def forward(self, x):
         x = x.reshape(x.shape[0], 2, -1)
-        x = self.bn1(self.maxpooling(self.leakyrelu(self.conv1d_1(x))))
-        x = self.bn2(self.maxpooling(self.leakyrelu(self.conv1d_2(x))))
-        x = self.bn3(self.leakyrelu(self.convTrans1d_3(x)))
+        x = self.maxpooling(self.leakyrelu(self.bn1(self.conv1d_1(x))))
+        x = self.maxpooling(self.leakyrelu(self.bn2(self.conv1d_2(x))))
+        x = self.leakyrelu(self.bn3(self.convTrans1d_3(x)))
         x = self.leakyrelu(self.convTrans1d_4(x))
         return x   
 
