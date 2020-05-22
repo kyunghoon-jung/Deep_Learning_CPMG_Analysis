@@ -48,7 +48,10 @@ parser.add_argument('-astep', required=True, type=int, help='distance between mo
 parser.add_argument('-arange', required=True, type=int, help='coverage range of a model. type: int')
 parser.add_argument('-noise', required=True, type=float, help='maxmum noise value (scale: M value). type: float')
 parser.add_argument('-path', required=True, type=str, help='name of save directory for prediction files. type: float')
-
+'''
+Excution Example) 
+python -cuda 1 -pulse 256 -width 10 -time 7000 -bmin 20000 -bmax 80000 -aint 10000 -afinal 10500 -arange 250 -astep 200 -noise 0.05 -path temp_dir
+'''
 args = parser.parse_args()
 CUDA_DEVICE = args.cuda
 N_PULSE = args.pulse
@@ -69,6 +72,8 @@ model_lists = get_AB_model_lists(A_init, A_final, A_step, A_range, B_init, B_fin
 
 A_existing_margin = 150
 B_existing_margin = 2500
+# the variable 'deno_pred_N32_B12000_above' is a list of spins predicted from N32 data
+# intentionally included to make the HPC models more accurate for classification. 
 deno_pred_N32_B12000_above = np.array([
     [-20738.524397906887, 40421.56414091587],
     [-8043.729442048509, 19196.62602543831],

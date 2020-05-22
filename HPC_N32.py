@@ -31,10 +31,10 @@ AB_lists_dic = np.load('./data/AB_target_dic_v4.npy').item()
 PRE_PROCESS = False
 PRE_SCALE = 1
 
-MAGNETIC_FIELD = 403.553                        # Unit: Gauss
+MAGNETIC_FIELD = 403.553                        # Unit: Gauss 
 GYRO_MAGNETIC_RATIO = 1.0705*1000               # Unit: Herts 
-WL_VALUE = MAGNETIC_FIELD*GYRO_MAGNETIC_RATIO*2*np.pi
-parser = argparse.ArgumentParser(description='parameter assign')
+WL_VALUE = MAGNETIC_FIELD*GYRO_MAGNETIC_RATIO*2*np.pi 
+parser = argparse.ArgumentParser(description='parameter assign') 
 
 parser.add_argument('-cuda', required=True, type=int, help='choice of cuda device. type: int')
 parser.add_argument('-pulse', required=True, type=int, help='CPMG pulse (N). type: int')
@@ -48,7 +48,10 @@ parser.add_argument('-arange', required=True, type=int, help='coverage range of 
 parser.add_argument('-astep', required=True, type=int, help='distance between each model. type: int')
 parser.add_argument('-noise', required=True, type=float, help='maxmum noise value (scale: M value). type: float')
 parser.add_argument('-path', required=True, type=str, help='name of save directory for prediction files. type: float')
-
+'''
+Excution Example) 
+python -cuda 1 -pulse 32 -width 10 -time 7000 -bmin 20000 -bmax 80000 -aint 10000 -afinal 10500 -arange 250 -astep 200 -noise 0.05 -path temp_dir
+'''
 args = parser.parse_args()
 CUDA_DEVICE = args.cuda
 N_PULSE = args.pulse
