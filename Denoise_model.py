@@ -1,7 +1,7 @@
 import os, sys, time
 import numpy as np
-np.set_printoptions(suppress=True)
 import matplotlib.pyplot as plt
+np.set_printoptions(suppress=True)
 from imports.utils import *
 from imports.models import *
 from imports.adabound import AdaBound 

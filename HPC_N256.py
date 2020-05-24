@@ -29,7 +29,7 @@ AB_lists_dic = np.load('./data/AB_target_dic_v4.npy').item()
 PRE_PROCESS = False
 PRE_SCALE = 1
 
-MAGNETIC_FIELD = 403.553                        # Unit: Gauss
+MAGNETIC_FIELD = 403.553                        # The external magnetic field strength. Unit: Gauss
 GYRO_MAGNETIC_RATIO = 1.0705*1000               # Unit: Herts 
 WL_VALUE = MAGNETIC_FIELD*GYRO_MAGNETIC_RATIO*2*np.pi
 parser = argparse.ArgumentParser(description='parameter assign')
@@ -53,7 +53,7 @@ python -cuda 1 -pulse 256 -width 10 -time 7000 -bmin 20000 -bmax 80000 -aint 100
 args = parser.parse_args()
 CUDA_DEVICE = args.cuda
 N_PULSE = args.pulse
-total_indices = np.load('/home/sonic/Coding/Git/CPMG_Analysis/data/CNN_model/indices/total_indices_v4_N{}.npy'.format(N_PULSE)).item() 
+total_indices = np.load('./data/total_indices_v4_N{}.npy'.format(N_PULSE)).item() 
 IMAGE_WIDTH = args.width
 TIME_RANGE  = args.time
 
