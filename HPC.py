@@ -41,10 +41,11 @@ class HPC_Model():
         self.exp_data_deno = np.load('./data/exp_data_{}_deno.npy'.format(self.N_PULSE))  # the denoised experimental data to be evalutated
         self.time_data = np.load('./data/time_data_{}.npy'.format(self.N_PULSE))          # the time data for the experimental data to be evalutated
         self.spin_bath = np.load('./data/spin_bath_M_value_N{}.npy'.format(self.N_PULSE)) # the spin bath data for the experimental N_PULSE (it is not pre-requisite so one can just ignore this line.)
-        self.total_indices = np.load('./data/total_indices_v4_N{}.npy'.format(N_PULSE)).item() 
+        self.total_indices = np.load('./data/total_indices_v4_N{}.npy'.format(self.N_PULSE)).item() 
 
     def binary_classification_train(self):
 
+        tic = time.time()
         if self.SAVE_DIR_NAME:
             deno_pred_N32_B15000_above = np.load('./data/predicted_results_N32_B15000above.npy') 
         total_raw_pred_list = []
@@ -100,6 +101,7 @@ class HPC_Model():
                 B_target_gap = 0  # distance between targets only valid when B_num >= 2.
                 distance_btw_target_side = 375
 
+            PRE_PROCESS, PRE_SCALE = False, 1
             if ((self.N_PULSE == 32) & (B_first<12000)):
                 PRE_PROCESS = True
                 PRE_SCALE = 8  
@@ -111,23 +113,25 @@ class HPC_Model():
 
             TPk_AB_candi, Y_train_arr, _  = gen_TPk_AB_candidates(AB_idx_set, False, *args)
             if self.EXISTING_SPINS:
+                A_existing_margin = 150
+                B_existing_margin = 2500
                 TPk_AB_candi = return_existing_spins_wrt_margins(deno_pred_N32_B15000_above, TPk_AB_candi, A_existing_margin, B_existing_margin)
 
-            model_index1 = get_model_index(total_indices, AB_idx_set[0][0], time_thres_idx=self.TIME_RANGE-20, image_width=self.IMAGE_WIDTH) 
-            model_index2 = get_model_index(total_indices, AB_idx_set[-1][0], time_thres_idx=self.TIME_RANGE-20, image_width=self.IMAGE_WIDTH) 
+            model_index1 = get_model_index(self.total_indices, AB_idx_set[0][0], time_thres_idx=self.TIME_RANGE-20, image_width=self.IMAGE_WIDTH) 
+            model_index2 = get_model_index(self.total_indices, AB_idx_set[-1][0], time_thres_idx=self.TIME_RANGE-20, image_width=self.IMAGE_WIDTH) 
             cut_idx = min(model_index1.shape[0], model_index2.shape[0])
 
             X_train_arr = np.zeros((class_num, len(AB_idx_set)*class_batch, cut_idx, 2*self.IMAGE_WIDTH+1))
 
             for idx1, [A_idx, B_idx] in enumerate(AB_idx_set):
-                model_index = get_model_index(total_indices, A_idx, time_thres_idx=self.TIME_RANGE-20, image_width=self.IMAGE_WIDTH)
+                model_index = get_model_index(self.total_indices, A_idx, time_thres_idx=self.TIME_RANGE-20, image_width=self.IMAGE_WIDTH)
                 model_index = model_index[:cut_idx, :]
                 for class_idx in range(class_num):
                     for idx2 in range(cpu_num_for_multi):
                         AB_lists_batch = TPk_AB_candi[class_idx, idx1*class_batch+idx2*batch_for_multi:idx1*class_batch+(idx2+1)*batch_for_multi]
-                        globals()["pool_{}".format(idx2)] = pool.apply_async(gen_M_arr_batch, [AB_lists_batch, model_index, time_data[:self.TIME_RANGE], 
+                        globals()["pool_{}".format(idx2)] = pool.apply_async(gen_M_arr_batch, [AB_lists_batch, model_index, self.time_data[:self.TIME_RANGE], 
                                                                                                 WL_VALUE, self.N_PULSE, PRE_PROCESS, PRE_SCALE, 
-                                                                                                noise_scale, spin_bath[:self.TIME_RANGE]])
+                                                                                                self.noise_scale, self.spin_bath[:self.TIME_RANGE]])
 
                     for idx3 in range(cpu_num_for_multi):  
                         X_train_arr[class_idx, idx1*class_batch+idx3*batch_for_multi:idx1*class_batch+(idx3+1)*batch_for_multi] = globals()["pool_{}".format(idx3)].get(timeout=None) 
@@ -164,7 +168,7 @@ class HPC_Model():
 
             model.load_state_dict(torch.load(trained_model[0][0])) 
 
-            total_A_lists, total_raw_pred_list, total_deno_pred_list = HPC_prediction(model, AB_idx_set, total_indices, self.TIME_RANGE, self.IMAGE_WIDTH, cut_idx, self.exp_data, self.exp_data_deno, 
+            total_A_lists, total_raw_pred_list, total_deno_pred_list = HPC_prediction(model, AB_idx_set, self.total_indices, self.TIME_RANGE, self.IMAGE_WIDTH, cut_idx, self.exp_data, self.exp_data_deno, 
                                                                                         total_A_lists, total_raw_pred_list, total_deno_pred_list, save_to_file=False)
 
         total_raw_pred_list  = np.array(total_raw_pred_list).T
