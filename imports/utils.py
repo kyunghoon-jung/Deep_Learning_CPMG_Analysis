@@ -1,10 +1,9 @@
 import pandas as pd
 import numpy as np
-import os, sys, glob
-import gc
-import time
+import os, sys, glob, time, gc
 import plotly.graph_objs as go
 from plotly.offline import init_notebook_mode, iplot
+import torch
 
 # calculate M values using a single DD interaction model.
 def M_list_return(time_table, wL_value, AB_list, n_pulse):  
@@ -270,7 +269,7 @@ def gen_AB_candidates(is_hierarchical=False, *args):
 
     indices = np.random.randint(AB_candidates_side.reshape(-1, 2).shape[0], size=(1, class_batch)) 
     AB_pseudo_target = AB_candidates_side.reshape(-1, 2)[indices]
-    target_AB_candi = np.concatenate((target_AB_candi, AB_pseudo_target), axis=0)
+    target_AB_candi = np.concatenate((AB_pseudo_target, target_AB_candi), axis=0)
     
     AB_candidates = np.concatenate((
         np.expand_dims(target_AB_candi, -2),
@@ -500,51 +499,48 @@ def return_index_without_larmor_idx(total_indices, model_index, TIME_RANGE, larm
 def HPC_prediction(model, AB_idx_set, total_indices, time_range, image_width, cut_idx, exp_data, exp_data_deno, 
                    total_A_lists, total_raw_pred_list, total_deno_pred_list, save_to_file=False):    
                    
-        model.eval()
+    model.eval()
 
-        raw_pred = []
-        deno_pred = []
-        A_pred_lists = []
-        for idx1, [A_idx, B_idx] in enumerate(AB_idx_set):
-            model_index = get_model_index(total_indices, A_idx, time_thres_idx=time_range-20, image_width=image_width)
-            model_index = model_index[:cut_idx, :]
-            exp_data_test = exp_data[model_index.flatten()]
+    raw_pred = []
+    deno_pred = []
+    A_pred_lists = []
+    for idx1, [A_idx, B_idx] in enumerate(AB_idx_set):
+        model_index = get_model_index(total_indices, A_idx, time_thres_idx=time_range-20, image_width=image_width)
+        model_index = model_index[:cut_idx, :]
+        exp_data_test = exp_data[model_index.flatten()]
 
-            exp_data_test = 1-(2*exp_data_test - 1)
-            exp_data_test = exp_data_test.reshape(1, -1)
-            exp_data_test = torch.Tensor(exp_data_test).cuda()
+        exp_data_test = 1-(2*exp_data_test - 1)
+        exp_data_test = exp_data_test.reshape(1, -1)
+        exp_data_test = torch.Tensor(exp_data_test).cuda()
 
-            pred = model(exp_data_test)
-            pred = pred.detach().cpu().numpy()
+        pred = model(exp_data_test)
+        pred = pred.detach().cpu().numpy()
 
-            A_pred_lists.append(A_idx)
-            raw_pred.append(pred[0])
+        A_pred_lists.append(A_idx)
+        raw_pred.append(pred[0])
 
-            total_A_lists.append(A_idx)
-            total_raw_pred_list.append(pred[0])
+        total_A_lists.append(A_idx)
+        total_raw_pred_list.append(pred[0])
 
-            print(A_idx, np.argmax(pred), np.max(pred), pred)
-            exp_data_test = exp_data_deno[model_index.flatten()]
+        print(A_idx, np.argmax(pred), np.max(pred), pred)
+        exp_data_test = exp_data_deno[model_index.flatten()]
 
-            exp_data_test = 1-(2*exp_data_test - 1)
-            exp_data_test = exp_data_test.reshape(1, -1)
-            exp_data_test = torch.Tensor(exp_data_test).cuda()
+        exp_data_test = 1-(2*exp_data_test - 1)
+        exp_data_test = exp_data_test.reshape(1, -1)
+        exp_data_test = torch.Tensor(exp_data_test).cuda()
 
-            pred = model(exp_data_test)
-            pred = pred.detach().cpu().numpy()
-            deno_pred.append(pred[0])
-            print(A_idx, np.argmax(pred), np.max(pred), pred)
-            print() 
+        pred = model(exp_data_test)
+        pred = pred.detach().cpu().numpy()
+        deno_pred.append(pred[0])
+        print(A_idx, np.argmax(pred), np.max(pred), pred)
+        print() 
 
-            total_deno_pred_list.append(pred[0])
-        raw_pred = np.array(raw_pred).T
-        deno_pred = np.array(deno_pred).T
-        if save_to_file:
-            np.save(MODEL_PATH+'A_idx_{}_A{}-{}_B{}-{}'.format(model_idx, A_first, A_end, B_first, B_end), A_pred_lists)
-            np.save(MODEL_PATH+'raw_pred_{}_A{}-{}_B{}-{}'.format(model_idx, A_first, A_end, B_first, B_end), raw_pred)
-            np.save(MODEL_PATH+'deno_pred_{}_A{}-{}_B{}-{}'.format(model_idx, A_first, A_end, B_first, B_end), deno_pred)
-
-    total_raw_pred_list  = np.array(total_raw_pred_list).T
-    total_deno_pred_list = np.array(total_deno_pred_list).T
+        total_deno_pred_list.append(pred[0])
+    raw_pred = np.array(raw_pred).T
+    deno_pred = np.array(deno_pred).T
+    if save_to_file:
+        np.save(MODEL_PATH+'A_idx_{}_A{}-{}_B{}-{}'.format(model_idx, A_first, A_end, B_first, B_end), A_pred_lists)
+        np.save(MODEL_PATH+'raw_pred_{}_A{}-{}_B{}-{}'.format(model_idx, A_first, A_end, B_first, B_end), raw_pred)
+        np.save(MODEL_PATH+'deno_pred_{}_A{}-{}_B{}-{}'.format(model_idx, A_first, A_end, B_first, B_end), deno_pred)
 
     return total_A_lists, total_raw_pred_list, total_deno_pred_list

@@ -22,10 +22,7 @@ import itertools
 
 print("Generation of datasets excuted.", time.asctime())
 tic = time.time()
-exp_data_32 = np.load('./data/exp_data_32.npy').flatten()
-exp_data_32_deno_deco = np.load('./data/exp_data_32_deno.npy') 
-time_data_32 = np.load('./data/time_data_32.npy') 
-spin_bath_32 = np.load('./data/spin_bath_M_value_N32.npy')
+
 AB_lists_dic = np.load('./data/AB_target_dic_v4.npy').item()
 
 PRE_PROCESS = False
@@ -48,9 +45,10 @@ parser.add_argument('-arange', required=True, type=int, help='coverage range of 
 parser.add_argument('-astep', required=True, type=int, help='distance between each model. type: int')
 parser.add_argument('-noise', required=True, type=float, help='maxmum noise value (scale: M value). type: float')
 parser.add_argument('-path', required=True, type=str, help='name of save directory for prediction files. type: float')
+parser.add_argument('-existspin', required=True, type=int, help='if there is a list of the existing spins = 1, if not = 0 type: int')
 '''
 Excution Example) 
-python -cuda 1 -pulse 32 -width 10 -time 7000 -bmin 20000 -bmax 80000 -aint 10000 -afinal 10500 -arange 250 -astep 200 -noise 0.05 -path temp_dir
+python -cuda 1 -pulse 32 -width 10 -time 7000 -bmin 20000 -bmax 80000 -aint 10000 -afinal 10500 -arange 200 -astep 250 -noise 0.05 -path temp_dir
 '''
 args = parser.parse_args()
 CUDA_DEVICE = args.cuda
@@ -58,6 +56,12 @@ N_PULSE = args.pulse
 total_indices = np.load('./data/total_indices_v4_N{}.npy'.format(N_PULSE)).item() 
 IMAGE_WIDTH = args.width
 TIME_RANGE  = args.time
+EXISTING_SPINS = args.existspin
+
+exp_data = np.load('./data/exp_data_{}.npy'.format(N_PULSE)).flatten()  # the experimental data to be evalutated
+exp_data_deno = np.load('./data/exp_data_{}_deno.npy'.format(N_PULSE))  # the denoised experimental data to be evalutated
+time_data = np.load('./data/time_data_{}.npy'.format(N_PULSE))          # the time data for the experimental data to be evalutated
+spin_bath = np.load('./data/spin_bath_M_value_N{}.npy'.format(N_PULSE)) # the spin bath data for the experimental N_PULSE (it is not pre-requisite so one can just ignore this line.)
 
 A_init  = args.aint   
 A_final = args.afinal    
@@ -72,14 +76,7 @@ model_lists = get_AB_model_lists(A_init, A_final, A_step, A_range, B_init, B_fin
 
 A_existing_margin = 150
 B_existing_margin = 2500
-deno_pred_N32_B12000_above = np.array([
-    [-20738.524397906887, 40421.56414091587],
-    [-8043.729442048509, 19196.62602543831],
-    [36020.12688619586, 26785.71864962578],
-    [11463.297802180363, 57308.602420240],
-    [-24492.32775241693, 23001.877063512802]
-])
-
+deno_pred_N32_B15000_above = np.load('./data/predicted_results_N32_B15000above.npy') 
 tic = time.time()
 total_raw_pred_list = []
 total_deno_pred_list = []
@@ -144,15 +141,15 @@ for model_idx, [A_first, A_end, B_first, B_end] in enumerate(model_lists):
                 B_side_max, B_target_gap, B_side_gap, A_target_margin, A_side_margin, A_far_side_margin,
                 class_batch, class_num, spin_zero_scale, distance_btw_target_side, side_candi_num) 
 
-    TPk_AB_candi, Y_train_arr  = gen_TPk_AB_candidates(AB_idx_set, False, *args)
-    TPk_AB_candi = return_existing_spins_wrt_margins(deno_pred_N32_B12000_above, TPk_AB_candi, A_existing_margin, B_existing_margin)
+    TPk_AB_candi, Y_train_arr, _  = gen_TPk_AB_candidates(AB_idx_set, False, *args)
+    if EXISTING_SPINS:
+        TPk_AB_candi = return_existing_spins_wrt_margins(deno_pred_N32_B15000_above, TPk_AB_candi, A_existing_margin, B_existing_margin)
 
     model_index1 = get_model_index(total_indices, AB_idx_set[0][0], time_thres_idx=time_range-20, image_width=image_width) 
     model_index2 = get_model_index(total_indices, AB_idx_set[-1][0], time_thres_idx=time_range-20, image_width=image_width) 
     cut_idx = min(model_index1.shape[0], model_index2.shape[0])
 
     X_train_arr = np.zeros((class_num, len(AB_idx_set)*class_batch, cut_idx, 2*image_width+1))
-    X_train_TPk_arr = np.zeros((class_num, len(AB_idx_set)*class_batch, 1))
 
     for idx1, [A_idx, B_idx] in enumerate(AB_idx_set):
         model_index = get_model_index(total_indices, A_idx, time_thres_idx=time_range-20, image_width=image_width)
@@ -160,13 +157,12 @@ for model_idx, [A_first, A_end, B_first, B_end] in enumerate(model_lists):
         for class_idx in range(class_num):
             for idx2 in range(cpu_num_for_multi):
                 AB_lists_batch = TPk_AB_candi[class_idx, idx1*class_batch+idx2*batch_for_multi:idx1*class_batch+(idx2+1)*batch_for_multi]
-                globals()["pool_{}".format(idx2)] = pool.apply_async(gen_M_arr_batch, [AB_lists_batch, model_index, time_data_32[:TIME_RANGE], 
+                globals()["pool_{}".format(idx2)] = pool.apply_async(gen_M_arr_batch, [AB_lists_batch, model_index, time_data[:TIME_RANGE], 
                                                                                         WL_VALUE, N_PULSE, PRE_PROCESS, PRE_SCALE, 
-                                                                                        noise_scale, spin_bath_32[:TIME_RANGE]])
+                                                                                        noise_scale, spin_bath[:TIME_RANGE]])
 
             for idx3 in range(cpu_num_for_multi):  
                 X_train_arr[class_idx, idx1*class_batch+idx3*batch_for_multi:idx1*class_batch+(idx3+1)*batch_for_multi] = globals()["pool_{}".format(idx3)].get(timeout=None) 
-                X_train_TPk_arr[class_idx, idx1*class_batch+idx3*batch_for_multi:idx1*class_batch+(idx3+1)*batch_for_multi, 0] = A_idx
             print("_", end=' ') 
 
     X_train_arr = X_train_arr.reshape(class_num*len(AB_idx_set)*class_batch, model_index.flatten().shape[0]) 
@@ -193,8 +189,8 @@ for model_idx, [A_first, A_end, B_first, B_end] in enumerate(model_lists):
     print("==================== A_idx: {}, B_idx: {} ======================".format(A_first, B_first))
 
     total_loss, total_val_loss, total_acc, trained_model = train(MODEL_PATH, N_PULSE, X_train_arr, Y_train_arr, model, hyperparameter_set, criterion,
-                                                                epochs, valid_batch, valid_mini_batch, exp_data_32, is_pred=False, is_print_results=False, is_preprocess=PRE_PROCESS, PRE_SCALE=PRE_SCALE,
-                                                                model_index=model_index, exp_data_deno=exp_data_32_deno_deco)
+                                                                epochs, valid_batch, valid_mini_batch, exp_data, is_pred=False, is_print_results=False, is_preprocess=PRE_PROCESS, PRE_SCALE=PRE_SCALE,
+                                                                model_index=model_index, exp_data_deno=exp_data_deno)
     min_A = np.min(np.array(AB_idx_set)[:,0])
     max_A = np.max(np.array(AB_idx_set)[:,0])
 
@@ -203,9 +199,13 @@ for model_idx, [A_first, A_end, B_first, B_end] in enumerate(model_lists):
     total_A_lists, total_raw_pred_list, total_deno_pred_list = HPC_prediction(model, AB_idx_set, total_indices, time_range, image_width, cut_idx, exp_data, exp_data_deno, 
                                                                                 total_A_lists, total_raw_pred_list, total_deno_pred_list, save_to_file=False)
 
+total_raw_pred_list  = np.array(total_raw_pred_list).T
+total_deno_pred_list = np.array(total_deno_pred_list).T
+
 np.save(MODEL_PATH+'total_N{}_A_idx.npy'.format(N_PULSE), total_A_lists)
 np.save(MODEL_PATH+'total_N{}_raw_pred.npy'.format(N_PULSE), total_raw_pred_list)
 np.save(MODEL_PATH+'total_N{}_deno_pred.npy'.format(N_PULSE), total_deno_pred_list)
+
 print('================================================================')
 print('Training Completed. Parsing parameters as follows.')
 print('N:{}, A_init:{}, A_final:{}, A_range:{}, A_step:{}, B_init:{}, B_final:{}, Image Width:{}, Time range:{}, noise:{}'.format(N_PULSE, 
