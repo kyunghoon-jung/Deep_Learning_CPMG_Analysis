@@ -60,8 +60,8 @@ if args.evaluateall:
     total_A_lists, total_raw_pred_list, total_deno_pred_list = hpc_model.binary_classification_train()
     # total_raw_pred_list, total_deno_pred_list 이결과를 가지고 개수를 파악. 
     # regression_model = Regression_Model(*args)
-    # regression_model.estimate_the_number_of_spins(total_raw_pred_list, total_deno_pred_list)
-    # regression_model.estimate_specific_AB_values()
+    # regression_model.estimate_the_number_of_spins(A_lists)
+    # regression_model.estimate_specific_AB_values(A_lists_with_the_number_of_spins)
     # 여기서 얻은 것 중에, B=15000보다 큰 리스트를 저장해놓음. --> 아래 경로로. 
     # np.load('./data/predicted_results_N32_B15000above.npy') 
 
@@ -73,8 +73,8 @@ if args.evaluateall:
     total_A_lists, total_raw_pred_list, total_deno_pred_list = hpc_model.binary_classification_train()
     # total_raw_pred_list, total_deno_pred_list 이결과를 가지고 개수를 파악
     # regression_model = Regression_Model(*args)
-    # regression_model.estimate_the_number_of_spins(total_raw_pred_list, total_deno_pred_list)
-    # regression_model.estimate_specific_AB_values()
+    # regression_model.estimate_the_number_of_spins(A_lists)
+    # regression_model.estimate_specific_AB_values(A_lists_with_the_number_of_spins)
 
     N_PULSE = 256
     EXISTING_SPINS = 1
