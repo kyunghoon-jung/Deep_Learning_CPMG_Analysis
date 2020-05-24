@@ -49,4 +49,7 @@ SAVE_DIR_NAME = str(args.path)
 
 model_lists = get_AB_model_lists(A_init, A_final, A_step, A_range, B_init, B_final)
 
-args = (CUDA_DEVICE, N_PULSE, )
+args = (CUDA_DEVICE, N_PULSE, IMAGE_WIDTH, TIME_RANGE, EXISTING_SPINS, A_init, A_final, A_step, A_range, B_init, B_final, noise_scale, SAVE_DIR_NAME, model_lists)
+
+hpc_model = HPC_Model(*args)
+total_A_lists, total_raw_pred_list, total_deno_pred_list = hpc_model.binary_classification_train()
