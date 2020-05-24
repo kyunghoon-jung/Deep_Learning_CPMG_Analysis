@@ -1,8 +1,5 @@
-import torch
-import torch.nn as nn
+import os, sys, time
 import numpy as np
-import time
-import os, sys
 np.set_printoptions(suppress=True)
 import matplotlib.pyplot as plt
 from imports.utils import *

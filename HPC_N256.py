@@ -1,13 +1,10 @@
-import matplotlib.pyplot as plt
+import glob, sys, time
 import numpy as np
-import glob
-import sys
+import matplotlib.pyplot as plt
+np.set_printoptions(suppress=True)
 from imports.utils import *
 from imports.models import *
 from imports.adabound import AdaBound 
-import time
-import argparse
-np.set_printoptions(suppress=True)
 
 from multiprocessing import Pool 
 POOL_PROCESS = 23  
@@ -19,6 +16,7 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.utils import shuffle
 import itertools
+import argparse
 
 print("Generation of datasets excuted.", time.asctime())
 tic = time.time()
@@ -42,8 +40,8 @@ parser.add_argument('-width', required=True, type=int, help='image width. type: 
 parser.add_argument('-time', required=True, type=int, help='number of data points used. type: int')
 parser.add_argument('-bmin', required=True, type=int, help='minimum boundary of B (Hz). type: int')
 parser.add_argument('-bmax', required=True, type=int, help='maximum boundary of B (Hz). type: int')
-parser.add_argument('-aint', required=True, type=int, help='initial value of A (Hz). type: int')
-parser.add_argument('-afinal', required=True, type=int, help='final value of A (Hz). type: int')
+parser.add_argument('-aint', required=True, type=int, help='initial value of A (Hz) range in the whole model. type: int')
+parser.add_argument('-afinal', required=True, type=int, help='final value of A (Hz) range in the whole model. type: int')
 parser.add_argument('-astep', required=True, type=int, help='distance between models. type: int')
 parser.add_argument('-arange', required=True, type=int, help='coverage range of a model. type: int')
 parser.add_argument('-noise', required=True, type=float, help='maxmum noise value (scale: M value). type: float')
