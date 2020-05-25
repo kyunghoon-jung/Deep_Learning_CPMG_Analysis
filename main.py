@@ -26,38 +26,46 @@ parser.add_argument('-noise', required=True, type=float, help='maxmum noise valu
 parser.add_argument('-path', required=True, type=str, help='name of save directory for prediction files. type: float')
 parser.add_argument('-existspin', required=True, type=int, help='if there is a list of the existing spins = 1, if not = 0 type: int')
 parser.add_argument('-evaluateall', required=True, type=int, help='if want to evaluate N32 and N256 at once = 1, if not = 0 type: int')
+parser.add_argument('-distance', required=True, type=int, help='it determines the distance between the target spin and side spin (Hz): int')
+parser.add_argument('-is_CNN', required=True, type=int, help='it determines whether the model is trained by CNN_structure = 1 or not = 0: int')
 '''
 Excution Example) 
-python -cuda 1 -pulse 32 -width 10 -time 7000 -bmin 20000 -bmax 80000 -aint 10000 -afinal 10500 -arange 200 -astep 250 -noise 0.05 -path temp_dir
+python3 -cuda 1 -pulse 32 -width 10 -time 7000 -bmin 20000 -bmax 80000 -aint 10000 \
+        -afinal 10500 -arange 200 -astep 250 -noise 0.05 -path temp_dir -existspin 0 -evaluateall 0
 '''
 
-args = parser.parse_args()
+pars_args = parser.parse_args()
 
-CUDA_DEVICE = args.cuda
-N_PULSE = args.pulse
-IMAGE_WIDTH = args.width
-TIME_RANGE  = args.time
-EXISTING_SPINS = args.existspin
+CUDA_DEVICE = pars_args.cuda
+N_PULSE = pars_args.pulse
+IMAGE_WIDTH = pars_args.width
+TIME_RANGE  = pars_args.time
+EXISTING_SPINS = pars_args.existspin
+EVALUATION_ALL = pars_args.evaluateall
 
-A_init  = args.aint   
-A_final = args.afinal    
-A_step  = args.astep      
-A_range = args.arange    
-B_init  = args.bmin       
-B_final = args.bmax       
-noise_scale = args.noise  
-SAVE_DIR_NAME = str(args.path)
+target_side_distance = pars_args.distance
+A_init  = pars_args.aint   
+A_final = pars_args.afinal    
+A_step  = pars_args.astep      
+A_range = pars_args.arange    
+B_init  = pars_args.bmin       
+B_final = pars_args.bmax       
+noise_scale = pars_args.noise  
+SAVE_DIR_NAME = str(pars_args.path)
+is_CNN = pars_args.is_CNN
 
 model_lists = get_AB_model_lists(A_init, A_final, A_step, A_range, B_init, B_final)
 
-args = (CUDA_DEVICE, N_PULSE, IMAGE_WIDTH, TIME_RANGE, EXISTING_SPINS, A_init, A_final, 
-        A_step, A_range, B_init, B_final, noise_scale, SAVE_DIR_NAME, model_lists)
-
-if args.evaluateall:
+if pars_args.evaluateall:
     EXISTING_SPINS = 0
-    B_init, B_final = 12000, 80000
+    A_init, A_final, B_init, B_final, target_side_distance = -50000, 50000, 12000, 80000, 50
+    args = (CUDA_DEVICE, N_PULSE, IMAGE_WIDTH, TIME_RANGE, EXISTING_SPINS, A_init, A_final, 
+            A_step, A_range, B_init, B_final, noise_scale, SAVE_DIR_NAME, model_lists, target_side_distance, is_CNN)
+
     hpc_model = HPC_Model(*args)
     total_A_lists, total_raw_pred_list, total_deno_pred_list = hpc_model.binary_classification_train()
+    A_lists = return_filtered_A_lists_wrt_pred(total_deno_pred_list[1,:])
+
     # total_raw_pred_list, total_deno_pred_list 이결과를 가지고 개수를 파악. 
     # regression_model = Regression_Model(*args)
     # regression_model.estimate_the_number_of_spins(A_lists)
@@ -89,5 +97,10 @@ if args.evaluateall:
     # regression_model.estimate_specific_AB_values()
     
 else:
+    args = (CUDA_DEVICE, N_PULSE, IMAGE_WIDTH, TIME_RANGE, EXISTING_SPINS, A_init, A_final, 
+            A_step, A_range, B_init, B_final, noise_scale, SAVE_DIR_NAME, model_lists, target_side_distance, is_CNN)
     hpc_model = HPC_Model(*args)
     total_A_lists, total_raw_pred_list, total_deno_pred_list = hpc_model.binary_classification_train()
+    np.save('./data/models/pred_raw_test2.npy', total_raw_pred_list)
+    np.save('./data/models/pred_deno_test2.npy',total_deno_pred_list)
+    np.save('./data/models/A_lists_test2.npy', total_A_lists)

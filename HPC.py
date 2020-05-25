@@ -20,22 +20,20 @@ import torch.optim as optim
 from sklearn.utils import shuffle
 import itertools
 
-AB_lists_dic = np.load('./data/AB_target_dic_v4.npy').item() # a pre-calculated grouped list of nuclear spins with the same target period.
-
 PRE_PROCESS = False
 PRE_SCALE = 1
-
 MAGNETIC_FIELD = 403.553                        # # The external magnetic field strength. Unit: Gauss
 GYRO_MAGNETIC_RATIO = 1.0705*1000               # Unit: Herts 
 WL_VALUE = MAGNETIC_FIELD*GYRO_MAGNETIC_RATIO*2*np.pi 
+AB_lists_dic = np.load('./data/AB_target_dic_v4.npy').item() # a pre-calculated grouped list of nuclear spins with the same target period.
 
-class HPC_Model():
+class Regression_Model():
 
     def __init__(self, *args):
         
-        self.CUDA_DEVICE, self.N_PULSE, self.IMAGE_WIDTH, self.TIME_RANGE, self.EXISTING_SPINS, \
+        self.CUDA_DEVICE, self.N_PULSE, self.IMAGE_WIDTH, self.TIME_RANGE_32, self.TIME_RANGE_256, self.EXISTING_SPINS, \
             self.A_init, self.A_final, self.A_step, self.A_range, self.B_init, self.B_final, \
-                self.noise_scale, self.SAVE_DIR_NAME, self.model_lists = args
+                self.noise_scale, self.SAVE_DIR_NAME, self.model_lists, self.target_side_distance, self.is_CNN = args
 
         self.exp_data = np.load('./data/exp_data_{}.npy'.format(self.N_PULSE)).flatten()  # the experimental data to be evalutated
         self.exp_data_deno = np.load('./data/exp_data_{}_deno.npy'.format(self.N_PULSE))  # the denoised experimental data to be evalutated
@@ -43,10 +41,221 @@ class HPC_Model():
         self.spin_bath = np.load('./data/spin_bath_M_value_N{}.npy'.format(self.N_PULSE)) # the spin bath data for the experimental N_PULSE (it is not pre-requisite so one can just ignore this line.)
         self.total_indices = np.load('./data/total_indices_v4_N{}.npy'.format(self.N_PULSE)).item() 
 
+    def estimate_specific_AB_values(self, predicted_periods):
+
+        model_lists = np.array([[A_temp_list[0], A_temp_list[-1], self.B_init, self.B_final] for A_temp_list in predicted_periods])
+
+        total_raw_pred_list = []
+        total_deno_pred_list = []
+        total_A_lists = []
+        print("==========================================================================================")
+        print('image_width:{}, TIME_RANGE_32:{}, TIME_RANGE_256:{}, B_init:{}, B_end:{}'.format(self.IMAGE_WIDTH, self.TIME_RANGE_32, self.TIME_RANGE_256, self.B_init, self.B_final))
+        print("==========================================================================================")
+
+        for model_idx, [A_first, A_end, B_first, B_end] in enumerate(model_lists):
+            print("========================================================================")
+            print('A_first:{}, A_end:{}, B_first:{}, B_end:{}'.format(A_first, A_end, B_first, B_end))
+            print("========================================================================")
+            A_resol, B_resol = 50, B_end-B_first
+
+            A_idx_list = np.arange(A_first, A_end+A_resol, A_num*A_resol)
+            if (B_end-B_first)%B_resol==0:
+                B_idx_list = np.arange(B_first, B_first+B_resol, B_num*B_resol)
+            else:
+                B_idx_list = np.arange(B_first, B_end, B_num*B_resol)
+            AB_idx_set = [[A_idx, B_idx] for A_idx, B_idx in itertools.product(A_idx_list, B_idx_list)]
+
+            A_side_num = 8
+            A_side_resol = 600
+            if N_PULSE==32:
+                B_side_min, B_side_max = 6000, 70000
+                B_side_gap = 2000
+                B_target_gap = 1000  # distance between targets only valid when B_num >= 2.
+
+            elif N_PULSE==256:
+                B_side_min, B_side_max = 1000, 14000
+                B_side_gap = 0  # distance between target and side (applied for both side_same and side)
+                B_target_gap = 0  
+
+            if ((N_PULSE == 32) & (B_first<12000)):
+                PRE_PROCESS = True
+                PRE_SCALE = 8
+
+            spin_zero_scale = {'same':zero_scale, 'side':0.50, 'mid':0.05, 'far':0.05}  # setting 'same'=1.0 for hierarchical model 
+
+            epochs = 20
+            valid_batch = 4096
+            valid_mini_batch = 1024
+
+            args = (AB_lists_dic, N_PULSE, A_num, B_num, A_resol, B_resol, A_side_num, A_side_resol, B_side_min,
+                        B_side_max, B_target_gap, B_side_gap, A_target_margin, A_side_margin, A_far_side_margin,
+                        class_batch, class_num, spin_zero_scale, distance_btw_target_side, side_candi_num) 
+
+            for class_idx in range(num_of_summation):
+                TPk_AB_candi, _, temp_hier_target_AB_candi  = gen_TPk_AB_candidates(AB_idx_set, True, *args)
+                temp_hier_target_AB_candi[:,:,0] = get_marginal_arr(temp_hier_target_AB_candi[:,:,0], A_hier_margin)
+                if class_idx==0:
+                    total_hier_target_AB_candi = temp_hier_target_AB_candi[:]
+                    target_candidates = TPk_AB_candi[0, :, 0, :]
+                    side_candidates   = TPk_AB_candi[1, :, 0, :] 
+                    rest_candidates   = TPk_AB_candi[1, :, 1:, :] 
+                else:
+                    total_hier_target_AB_candi = np.concatenate((total_hier_target_AB_candi, temp_hier_target_AB_candi[:]), axis=1)
+                    target_candidates = np.concatenate((target_candidates, TPk_AB_candi[0, :, 0, :]), axis=0)
+                    side_candidates   = np.concatenate((side_candidates, TPk_AB_candi[1, :, 0, :]), axis=0)
+                    rest_candidates   = np.concatenate((rest_candidates, TPk_AB_candi[1, :, 1:, :]), axis=0) 
+
+            hier_indices = return_total_hier_index_list(A_idx_list, cut_threshold=2)
+            total_class_num = hier_indices[-1][0].__len__() + 1
+
+            total_TPk_AB_candidates = np.zeros((total_class_num, num_of_summation*TPk_AB_candi.shape[1], total_class_num+TPk_AB_candi.shape[2]+2, 2))
+            indices = np.random.randint(rest_candidates.shape[0], size=(total_class_num, rest_candidates.shape[0]))
+            total_TPk_AB_candidates[:, :, (total_class_num-1):-4, :] = rest_candidates[indices]
+            indices = np.random.randint(side_candidates.shape[0], size=(total_class_num, side_candidates.shape[0], 2)) 
+            total_TPk_AB_candidates[:, :, -4:-2, :] = side_candidates[indices] 
+            indices = np.random.randint(side_candidates.shape[0], size=(total_class_num, side_candidates.shape[0], 2)) 
+            total_TPk_AB_candidates[:, :, -2:, :] = side_candidates[indices] 
+            
+            if ADD_EXISTING_SPIN == True:
+                total_TPk_AB_candidates = return_existing_spins_wrt_margins(deno_pred_N32_B12000_above, total_TPk_AB_candidates, A_existing_margin, B_existing_margin)
+
+            final_TPk_AB_candidates = total_TPk_AB_candidates[:1]
+            for class_idx, hier_index in enumerate(hier_indices): 
+                temp_batch = total_TPk_AB_candidates.shape[1] // len(hier_index)
+                for idx2, index in enumerate(hier_index):
+                    temp = np.swapaxes(total_hier_target_AB_candi[index], 0, 1)
+                    if idx2 < (len(hier_index)-1):
+                        temp_idx = np.random.randint(total_hier_target_AB_candi.shape[1], size=(temp_batch))
+                        total_TPk_AB_candidates[class_idx+1, (idx2)*temp_batch:(idx2+1)*temp_batch, :len(index)] = temp[temp_idx]
+                    else:
+                        residual_batch = total_TPk_AB_candidates[class_idx+1, (idx2)*temp_batch:, :len(index)].shape[0]
+                        temp_idx = np.random.randint(total_hier_target_AB_candi.shape[1], size=(residual_batch))
+                        total_TPk_AB_candidates[class_idx+1, (idx2)*temp_batch:, :len(index)] = temp[temp_idx]
+                final_TPk_AB_candidates = np.concatenate((final_TPk_AB_candidates, total_TPk_AB_candidates[class_idx+1:class_idx+2, :, :]), axis=0)
+#             raise
+            median_A_idx = len(AB_idx_set) // 2
+    
+            # below is for generating N256 datasets
+            model_index = get_model_index(total_indices, AB_idx_set[median_A_idx][0], time_thres_idx=TIME_RANGE-20, image_width=image_width) 
+
+            total_class_num = final_TPk_AB_candidates.shape[0]
+            X_train_arr = np.zeros((total_class_num, final_TPk_AB_candidates.shape[1], model_index.shape[0], 2*image_width+1))
+            Y_train_arr = np.zeros((total_class_num, final_TPk_AB_candidates.shape[1], total_class_num))
+            mini_batch = X_train_arr.shape[1] // cpu_num_for_multi
+            for class_idx in range(total_class_num):
+                Y_train_arr[class_idx, :, class_idx] = 1
+                for idx1 in range(cpu_num_for_multi):
+                    AB_lists_batch = final_TPk_AB_candidates[class_idx, idx1*mini_batch:(idx1+1)*mini_batch]
+                    globals()["pool_{}".format(idx1)] = pool.apply_async(gen_M_arr_batch, [AB_lists_batch, model_index, time_data[:TIME_RANGE], 
+                                                                                            WL_VALUE, N_PULSE, PRE_PROCESS, PRE_SCALE, 
+                                                                                            noise_scale, spin_bath[:TIME_RANGE]])
+
+                for idx2 in range(cpu_num_for_multi):
+                    X_train_arr[class_idx, idx2*mini_batch:(idx2+1)*mini_batch] = globals()["pool_{}".format(idx2)].get(timeout=None) 
+                print("class_idx:", class_idx, end=' ') 
+                
+            # below is for generating N32 datasets
+            model_index_32 = get_model_index(total_indices_32, AB_idx_set[median_A_idx][0], time_thres_idx=TIME_RANGE_32-20, image_width=image_width) 
+
+            total_class_num = final_TPk_AB_candidates.shape[0]
+            X_train_arr_32 = np.zeros((total_class_num, final_TPk_AB_candidates.shape[1], model_index_32.shape[0], 2*image_width+1))
+            Y_train_arr_32 = np.zeros((total_class_num, final_TPk_AB_candidates.shape[1], total_class_num))
+            mini_batch = X_train_arr_32.shape[1] // cpu_num_for_multi
+            for class_idx in range(total_class_num):
+                Y_train_arr_32[class_idx, :, class_idx] = 1
+                for idx1 in range(cpu_num_for_multi):
+                    AB_lists_batch = final_TPk_AB_candidates[class_idx, idx1*mini_batch:(idx1+1)*mini_batch]
+                    globals()["pool_{}".format(idx1)] = pool.apply_async(gen_M_arr_batch, [AB_lists_batch, model_index_32, time_data_32[:TIME_RANGE_32], 
+                                                                                            WL_VALUE, N_PULSE_32, PRE_PROCESS, PRE_SCALE, 
+                                                                                            noise_scale, spin_bath_32[:TIME_RANGE_32]])
+
+                for idx2 in range(cpu_num_for_multi):
+                    X_train_arr_32[class_idx, idx2*mini_batch:(idx2+1)*mini_batch] = globals()["pool_{}".format(idx2)].get(timeout=None) 
+                print("class_idx:", class_idx, end=' ') 
+            
+            X_train_arr = X_train_arr.reshape(-1, model_index.flatten().shape[0]) 
+            Y_train_arr = Y_train_arr.reshape(-1, Y_train_arr.shape[2]) 
+
+            X_train_arr_32 = X_train_arr_32.reshape(-1, model_index_32.flatten().shape[0]) 
+            Y_train_arr_32 = Y_train_arr_32.reshape(-1, Y_train_arr_32.shape[2]) 
+
+            X_train_arr = np.concatenate((X_train_arr, X_train_arr_32), axis=1)
+
+            model = HPC(X_train_arr.shape[-1], Y_train_arr.shape[-1]).cuda() 
+            try:
+                model(torch.Tensor(X_train_arr[:16]).cuda()) 
+            except:
+                raise NameError("The input shape should be revised")
+
+            total_parameter = sum(p.numel() for p in model.parameters()) 
+            print('total_parameter: ', total_parameter / 1000000, 'M')
+
+            MODEL_PATH = '/data2/test2243/'
+            mini_batch_list = [2048]  
+            learning_rate_list = [5e-6] 
+            op_list = [['Adabound', [30,15,7,1]]] 
+            criterion = nn.BCELoss().cuda()
+
+            hyperparameter_set = [[mini_batch, learning_rate, selected_optim_name] for mini_batch, learning_rate, selected_optim_name in itertools.product(mini_batch_list, learning_rate_list, op_list)]
+            print("==================== A_idx: {}, B_idx: {} ======================".format(A_first, B_first))
+
+            total_loss, total_val_loss, total_acc, trained_model = train(MODEL_PATH, MODEL_NAME, N_PULSE, X_train_arr, Y_train_arr, model, hyperparameter_set, criterion, 
+                                                                        epochs, valid_batch, valid_mini_batch, exp_data, is_pred=False, is_print_results=False, is_preprocess=PRE_PROCESS, PRE_SCALE=PRE_SCALE,
+                                                                        model_index=model_index, exp_data_deno=exp_data_deco, is_regression=False)
+
+            model.load_state_dict(torch.load(trained_model[0][0])) 
+            model.eval()
+            print("Model loaded as evalutation mode. Model path:", trained_model[0][0])
+
+            exp_data_test = np.hstack((exp_data[model_index.flatten()], exp_data_32[model_index_32.flatten()]))
+            exp_data_test = 1-(2*exp_data_test - 1)
+            exp_data_test = exp_data_test.reshape(1, -1)
+            exp_data_test = torch.Tensor(exp_data_test).cuda()
+
+            pred = model(exp_data_test)
+            pred = pred.detach().cpu().numpy()
+            total_raw_pred_list.append([pred[0], total_class_num, hier_indices[-1][0].__len__()])
+            print("raw", np.argmax(pred), np.max(pred), pred)
+
+            exp_data_test = np.hstack((exp_data_deco[model_index.flatten()], exp_data_deco_32[model_index_32.flatten()]))
+            exp_data_test = 1-(2*exp_data_test - 1)
+            exp_data_test = exp_data_test.reshape(1, -1)
+            exp_data_test = torch.Tensor(exp_data_test).cuda()
+
+            pred = model(exp_data_test)
+            pred = pred.detach().cpu().numpy()
+            total_deno_pred_list.append([pred[0], total_class_num, hier_indices[-1][0].__len__()])
+            print("deno", np.argmax(pred), np.max(pred), pred)
+            print("Config:N_PULSE{}, B_init{}, B_final{}, total_time{} w{}_batch{} zero{} time_32{}".format(N_PULSE, B_init, B_final, total_time, width, batch_for_multi, zero_scale, time_32))
+            total_results.append([total_raw_pred_list[model_idx], total_deno_pred_list[model_idx], hier_indices, width, total_time, time_32, B_init, B_final, noise_scale, batch_for_multi, zero_scale]) 
+
+        np.save('/data2/test2243/confirm_raw_results_N{}_Bmin{}_Bmax{}_t{}_w{}_batch{}_side_05.npy'.format(N_PULSE, B_init, B_final, total_time, width, batch_for_multi), np.array(total_raw_pred_list))
+        np.save('/data2/test2243/confirm_deno_results_N{}_Bmin{}_Bmax{}_t{}_w{}_batch{}_side_05.npy'.format(N_PULSE, B_init, B_final, total_time, width, batch_for_multi), np.array(total_deno_pred_list))
+
+
+
+class HPC_Model():
+
+    def __init__(self, *args):
+        
+        self.CUDA_DEVICE, self.N_PULSE, self.IMAGE_WIDTH, self.TIME_RANGE, self.EXISTING_SPINS, \
+            self.A_init, self.A_final, self.A_step, self.A_range, self.B_init, self.B_final, \
+                self.noise_scale, self.SAVE_DIR_NAME, self.model_lists, self.target_side_distance, self.is_CNN = args
+
+        self.exp_data = np.load('./data/exp_data_{}.npy'.format(self.N_PULSE)).flatten()  # the experimental data to be evalutated
+        self.exp_data_deno = np.load('./data/exp_data_{}_deno.npy'.format(self.N_PULSE))  # the denoised experimental data to be evalutated
+        self.time_data = np.load('./data/time_data_{}.npy'.format(self.N_PULSE))          # the time data for the experimental data to be evalutated
+        self.spin_bath = np.load('./data/spin_bath_M_value_N{}.npy'.format(self.N_PULSE)) # the spin bath data for the experimental N_PULSE (it is not pre-requisite so one can just ignore this line.)
+        self.total_indices = np.load('./data/total_indices_v4_N{}.npy'.format(self.N_PULSE)).item() 
+
+        if self.EXISTING_SPINS:
+            deno_pred_N32_B15000_above = np.load('./data/predicted_results_N32_B15000above.npy') 
+
+        
     def binary_classification_train(self):
 
-        tic = time.time()
-        if self.SAVE_DIR_NAME:
+        tic = time.time() 
+        if self.EXISTING_SPINS:
             deno_pred_N32_B15000_above = np.load('./data/predicted_results_N32_B15000above.npy') 
         total_raw_pred_list = []
         total_deno_pred_list = []
@@ -93,13 +302,13 @@ class HPC_Model():
                 B_side_min, B_side_max = 6000, 70000
                 B_side_gap = 5000
                 B_target_gap = 1000
-                distance_btw_target_side = 1000
+                distance_btw_target_side = A_target_margin+A_side_margin+self.target_side_distance # the final distance between target and side = distance_btw_target_side - (A_target_margin+A_side_margin)
 
             elif self.N_PULSE==256:
                 B_side_min, B_side_max = 1500, 25000
                 B_side_gap = 100  # distance between target and side (applied for both side_same and side)
                 B_target_gap = 0  # distance between targets only valid when B_num >= 2.
-                distance_btw_target_side = 375
+                distance_btw_target_side = A_target_margin+A_side_margin+self.target_side_distance
 
             PRE_PROCESS, PRE_SCALE = False, 1
             if ((self.N_PULSE == 32) & (B_first<12000)):
@@ -137,11 +346,17 @@ class HPC_Model():
                         X_train_arr[class_idx, idx1*class_batch+idx3*batch_for_multi:idx1*class_batch+(idx3+1)*batch_for_multi] = globals()["pool_{}".format(idx3)].get(timeout=None) 
                     print("_", end=' ') 
 
-            X_train_arr = X_train_arr.reshape(class_num*len(AB_idx_set)*class_batch, model_index.flatten().shape[0]) 
-            Y_train_arr = Y_train_arr.reshape(class_num*len(AB_idx_set)*class_batch, class_num) 
-
-            X_train_arr, Y_train_arr = shuffle(X_train_arr, Y_train_arr)
-            model = HPC(X_train_arr.shape[1], Y_train_arr.shape[1]).cuda()
+            if self.is_CNN:
+                X_train_arr = X_train_arr.reshape(class_num*len(AB_idx_set)*class_batch, 1, model_index.shape[0], model_index.shape[1]) 
+                Y_train_arr = Y_train_arr.reshape(class_num*len(AB_idx_set)*class_batch, class_num) 
+                X_train_arr, Y_train_arr = shuffle(X_train_arr, Y_train_arr)
+                model = HPC_CNN(X_train_arr[0,0].shape, Y_train_arr.shape[1]).cuda() 
+            else:
+                X_train_arr = X_train_arr.reshape(class_num*len(AB_idx_set)*class_batch, model_index.flatten().shape[0])
+                Y_train_arr = Y_train_arr.reshape(class_num*len(AB_idx_set)*class_batch, class_num) 
+                X_train_arr, Y_train_arr = shuffle(X_train_arr, Y_train_arr)
+                model = HPC(X_train_arr.shape[1], Y_train_arr.shape[1]).cuda()
+            
             try:
                 model(torch.Tensor(X_train_arr[:5]).cuda()) 
             except:
@@ -153,7 +368,7 @@ class HPC_Model():
             MODEL_PATH = './data/models/' + self.SAVE_DIR_NAME + '/'
             if not os.path.exists(MODEL_PATH): os.mkdir(MODEL_PATH)
 
-            mini_batch_list = [2048]  
+            mini_batch_list = [128]  
             learning_rate_list = [5e-6] 
             op_list = [['Adabound', [30,15,7,1]]] 
             criterion = nn.BCELoss().cuda()
@@ -169,7 +384,7 @@ class HPC_Model():
             model.load_state_dict(torch.load(trained_model[0][0])) 
 
             total_A_lists, total_raw_pred_list, total_deno_pred_list = HPC_prediction(model, AB_idx_set, self.total_indices, self.TIME_RANGE, self.IMAGE_WIDTH, cut_idx, self.exp_data, self.exp_data_deno, 
-                                                                                        total_A_lists, total_raw_pred_list, total_deno_pred_list, save_to_file=False)
+                                                                                        total_A_lists, total_raw_pred_list, total_deno_pred_list, self.is_CNN, save_to_file=False)
 
         total_raw_pred_list  = np.array(total_raw_pred_list).T
         total_deno_pred_list = np.array(total_deno_pred_list).T

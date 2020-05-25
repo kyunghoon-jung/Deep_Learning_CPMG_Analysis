@@ -100,6 +100,40 @@ class Denoise_Model(nn.Module):
         x = self.leakyrelu(self.convTrans1d_4(x))
         return x   
 
+class HPC_CNN(nn.Module):  # the HPC_CNN model (just for test)
+    def __init__(self, input_features: "torch.Size", output_features: int):
+        super(HPC_CNN, self).__init__()
+
+        self.conv1 = nn.Conv2d(1, 32, 3, padding=1)  # H_out(W_out) = (H_in(W_in) + 2*padding[0] - dilation[0]*(kernel_size[0](w:[1])-1) - 1) / stride[0] + 1
+        self.conv1_bn = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 32, 3, padding=1)    
+        self.conv2_bn = nn.BatchNorm2d(32)
+        self.conv3 = nn.Conv2d(32, 64, 3, padding=1)    
+        self.conv3_bn = nn.BatchNorm2d(64)
+        self.conv4 = nn.Conv2d(64, 64, 3, padding=1)    
+        self.conv4_bn = nn.BatchNorm2d(64)
+
+        self.leaky = nn.LeakyReLU() 
+        self.relu = nn.ReLU() 
+        self.pooling = nn.MaxPool2d(2)
+        self.num_pooling = 2
+        self.linear_num = 64*(input_features[0]//(2**self.num_pooling))*(input_features[1]//(2**self.num_pooling)) # 64: the number of channels of the last layer
+        self.fc1 = nn.Linear(self.linear_num, 256)  
+        self.fc1_bn = nn.BatchNorm1d(256) 
+        self.fc_final = nn.Linear(256, output_features) 
+        self.sigmoid = nn.Sigmoid() 
+
+    def forward(self, x): 
+        out = self.pooling(self.leaky(self.conv2_bn(self.conv2(self.leaky(self.conv1_bn(self.conv1(x)))))))
+        out = self.pooling(self.leaky(self.conv4_bn(self.conv4(self.leaky(self.conv3_bn(self.conv3(out))))))) 
+        # out = self.pooling(self.leaky(self.conv7_bn(self.conv7(self.leaky(self.conv6_bn(self.conv6(self.leaky(self.conv5_bn(self.conv5(out)))))))))) 
+        # out = self.pooling(self.leaky(self.conv7_bn(self.conv7(out))))
+
+        out = out.flatten().view(out.shape[0], -1) 
+        out = self.leaky(self.fc1_bn(self.fc1(out))) 
+        out = self.sigmoid(self.fc_final(out)) 
+        return out 
+
 def select_optimizer(model, optim_name, learning_rate):
     if optim_name=='SGD':
         return torch.optim.SGD(model.parameters(), lr=learning_rate) 
