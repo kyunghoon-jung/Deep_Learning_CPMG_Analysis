@@ -170,7 +170,7 @@ def model_prediction(model, file_name, target_data, model_index, is_preprocess=F
 
 def train(MODEL_PATH, N_PULSE, X_train_arr, Y_train_arr, model, hyperparameter_set, criterion, 
           epochs, valid_batch, valid_mini_batch, exp_data=0, is_pred=False, is_print_results=False, is_preprocess=False, PRE_SCALE=4,
-          model_index=False, exp_data_deno=False):
+          model_index=False, exp_data_deno=False, is_regression=False):
     start_time = time.time()
     
     train_batch = X_train_arr.shape[0] - valid_batch 
@@ -223,12 +223,16 @@ def train(MODEL_PATH, N_PULSE, X_train_arr, Y_train_arr, model, hyperparameter_s
                 prediction = model(X_valid)
                 val_loss = criterion(prediction, Y_valid)
 
-                bool_pred = torch.argmax(prediction, dim=1, keepdim=True)
-                bool_y = torch.argmax(Y_valid, dim=1, keepdim=True)
-                accuracy = torch.sum(bool_pred == bool_y).float() / len(Y_valid) * 100
-                print('Val_loss: {:.5f} | Accuracy: {:.2f} %'.format(val_loss.item(), accuracy.item()), end=' | ')
-                total_val_loss.append(val_loss.cpu().detach().item())
-                total_acc.append(accuracy.cpu().detach().item())
+                if is_regression:
+                    print('Val_loss: {:.5f} %'.format(val_loss.item()), end=' | ')
+                    total_val_loss.append(val_loss.cpu().detach().item())
+                else:
+                    bool_pred = torch.argmax(prediction, dim=1, keepdim=True)
+                    bool_y = torch.argmax(Y_valid, dim=1, keepdim=True)
+                    accuracy = torch.sum(bool_pred == bool_y).float() / len(Y_valid) * 100
+                    print('Val_loss: {:.5f} | Accuracy: {:.2f} %'.format(val_loss.item(), accuracy.item()), end=' | ')
+                    total_val_loss.append(val_loss.cpu().detach().item())
+                    total_acc.append(accuracy.cpu().detach().item())
                 
             print("time: {}(s)".format(np.round(time.time() - tic,3)), end=' | ')
             total_val_loss = np.array(total_val_loss)
@@ -236,10 +240,12 @@ def train(MODEL_PATH, N_PULSE, X_train_arr, Y_train_arr, model, hyperparameter_s
                 torch.save(model.state_dict(), file_name)
             else:
                 if np.min(total_val_loss[-3:-1]) < total_val_loss[-1]:
-                    optimizer = select_optimizer(model, selected_optim_name[0], learning_rate=learning_rate*0.35)
+                    learning_rate *= 0.35  
+                    optimizer = select_optimizer(model, selected_optim_name[0], learning_rate=learning_rate)  
+            
+            total_val_loss = list(total_val_loss)  
             print("lr: ", learning_rate)
 
-            total_val_loss = list(total_val_loss) 
             try:
                 if np.min(total_val_loss[-8:-4]) < np.min(total_val_loss[-4:]):
                     break

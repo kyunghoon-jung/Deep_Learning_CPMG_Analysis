@@ -438,7 +438,7 @@ def return_filtered_A_lists_wrt_pred(pred_result, A_idx_list, threshold=0.8):
                 if idx!=(len(indices)-1):
                     if (indices[idx+1] - temp_index == 1) | (indices[idx+1] - temp_index == 2):
                         temp.append(temp_index)
-            if (idx==(len(indices)-1)) & (len(temp)>2):
+            if (idx==(len(indices)-1)) & (len(temp)>1):
                 grouped_indices.append(temp) 
     grouped_A_lists = [list(A_idx_list[temp_indices]) for temp_indices in grouped_indices if len(temp_indices) > 2]
     return grouped_A_lists 
@@ -483,21 +483,71 @@ def gaussian_slope_px(M_lists: "data of M values", time_table: "time data",
     px_lists_slope = (M_lists_slope + 1) / 2
     return px_lists_slope.squeeze(), slope.squeeze()
 
-# return 'model_index' excluding time points of dips of the larmor frequency
-def return_index_without_larmor_idx(total_indices, model_index, TIME_RANGE, larmor_image_width):
-    larmor_index = get_model_index(total_indices, 0, time_thres_idx=TIME_RANGE, image_width=larmor_image_width) 
-    larmor_index = larmor_index.flatten() 
-    total_model_indices = list(range(len(model_index)))  
+# The following two functions are used for producing index combinations to select multiple Target Period(TP)s for HPC models.
+# : these two functions are used for determining the number of spins in a single broad dip in CPMG signal
+def return_combination_A_lists(chosen_indices, full_chosen_indices, cut_threshold):
+    total_combination = [] 
+    for temp_idx in chosen_indices: 
+        indices = [] 
+        if type(temp_idx) == np.int64: 
+            temp_idx = np.array([temp_idx]) 
+        for j in full_chosen_indices: 
+            abs_temp = np.abs(temp_idx - j) 
+            if len(abs_temp[abs_temp<cut_threshold]) == 0:
+                indices.append(j) 
+        temp_idx = list(temp_idx) 
+        total_combination += [temp_idx+[j] for j in indices]
+    return np.array(total_combination) 
+
+def return_total_hier_index_list(A_list, cut_threshold):
+    total_index_lists = []
+
+    A_list_length = len(A_list) 
+    if (A_list_length==1): return np.array([[[0]]])
+    if (A_list_length==2): return np.array([[[0], [1]]])
+    if (A_list_length==3): return np.array([[[1]]])
+    if (A_list_length==4): return np.array([[[1], [2]]])
+    if (A_list_length==5): return np.array([[[1],[2],[3]], [[1,3]]])
+
+    if A_list_length%2 == 0:
+        final_idx = A_list_length//2 
+    else:
+        final_idx = A_list_length//2 + 1
+
+    full_chosen_indices = np.arange(1, A_list_length-1) 
+    half_chosen_indices = np.arange(1, final_idx) 
+    temp_index = return_combination_A_lists(half_chosen_indices, full_chosen_indices, cut_threshold=cut_threshold) 
+
+    while 1:
+        if (A_list_length>=10) & (A_list_length<12):
+            if len(temp_index[0])>=2: total_index_lists.append(temp_index)
+        elif (A_list_length>=12) & (A_list_length<15): 
+            if len(temp_index[0])>=3: total_index_lists.append(temp_index)
+        elif (A_list_length>=15):
+            if len(temp_index[0])>=4: total_index_lists.append(temp_index)
+        else:
+            total_index_lists.append(temp_index)
+        temp_index = return_combination_A_lists(temp_index, full_chosen_indices, cut_threshold=cut_threshold) 
+        if len(temp_index) == 0:break 
+    return np.array(total_index_lists) 
+
+# return indexing array excluding targeted A index ( for example, to exclude the Larmor Frequency index, set A_idx = 0)
+def return_index_without_A_idx(total_indices, model_index, A_idx, TIME_RANGE, width):
+    selected_index = get_model_index(total_indices, A_idx, time_thres_idx=TIME_RANGE, image_width=width) 
+    selected_index = selected_index.flatten()
+    total_model_indices = list(range(len(model_index)))
+    remove_index = []
     for idx, temp_indices in enumerate(model_index):
-        temp = [k for k in temp_indices if k in larmor_index] 
+        temp = [k for k in temp_indices if k in selected_index]
         if len(temp) > 0:
             total_model_indices.remove(idx)
+            remove_index.append(idx)
     model_index = model_index[total_model_indices,:]
-    return model_index
+    return model_index, remove_index
 
 # return HPC_prediction_lists
-def HPC_prediction(model, AB_idx_set, total_indices, time_range, image_width, cut_idx, exp_data, exp_data_deno, 
-                   total_A_lists, total_raw_pred_list, total_deno_pred_list, is_CNN, save_to_file=False):    
+def HPC_prediction(model, AB_idx_set, total_indices, time_range, image_width, selected_index, cut_idx, is_removal, exp_data, exp_data_deno, 
+                   total_A_lists, total_raw_pred_list, total_deno_pred_list, is_CNN, PRE_PROCESS, PRE_SCALE, save_to_file=False):    
                    
     model.eval()
 
@@ -505,18 +555,26 @@ def HPC_prediction(model, AB_idx_set, total_indices, time_range, image_width, cu
     deno_pred = []
     A_pred_lists = []
     for idx1, [A_idx, B_idx] in enumerate(AB_idx_set):
-        model_index = get_model_index(total_indices, A_idx, time_thres_idx=time_range-20, image_width=image_width)
-        model_index = model_index[:cut_idx, :]
-        if is_CNN:
-            exp_data_test = exp_data[model_index]
-            exp_data_test = 1-(2*exp_data_test - 1)
-            exp_data_test = exp_data_test.reshape(1, 1, model_index.shape[0], model_index.shape[1])
-            exp_data_test = torch.Tensor(exp_data_test).cuda()
+        model_index = get_model_index(total_indices, A_idx, time_thres_idx=time_range, image_width=image_width)
+        if is_removal:
+            model_index = model_index[selected_index]
         else:
-            exp_data_test = exp_data[model_index.flatten()]
-            exp_data_test = 1-(2*exp_data_test - 1)
+            model_index = model_index[:cut_idx]
+        if PRE_PROCESS:
+            exp_data_test = pre_processing(exp_data[model_index.flatten()], PRE_SCALE)
             exp_data_test = exp_data_test.reshape(1, -1)
             exp_data_test = torch.Tensor(exp_data_test).cuda()
+        else:
+            if is_CNN:
+                exp_data_test = exp_data[model_index]
+                exp_data_test = 1-(2*exp_data_test - 1)
+                exp_data_test = exp_data_test.reshape(1, 1, model_index.shape[0], model_index.shape[1])
+                exp_data_test = torch.Tensor(exp_data_test).cuda()
+            else:
+                exp_data_test = exp_data[model_index.flatten()]
+                exp_data_test = 1-(2*exp_data_test - 1)
+                exp_data_test = exp_data_test.reshape(1, -1)
+                exp_data_test = torch.Tensor(exp_data_test).cuda()
 
         pred = model(exp_data_test)
         pred = pred.detach().cpu().numpy()
@@ -528,17 +586,21 @@ def HPC_prediction(model, AB_idx_set, total_indices, time_range, image_width, cu
         total_raw_pred_list.append(pred[0])
 
         print(A_idx, np.argmax(pred), np.max(pred), pred)
-
-        if is_CNN:
-            exp_data_test = exp_data_deno[model_index]
-            exp_data_test = 1-(2*exp_data_test - 1)
-            exp_data_test = exp_data_test.reshape(1, 1, model_index.shape[0], model_index.shape[1])
-            exp_data_test = torch.Tensor(exp_data_test).cuda()
-        else:
-            exp_data_test = exp_data_deno[model_index.flatten()]
-            exp_data_test = 1-(2*exp_data_test - 1)
+        if PRE_PROCESS:
+            exp_data_test = pre_processing(exp_data_deno[model_index.flatten()], PRE_SCALE)
             exp_data_test = exp_data_test.reshape(1, -1)
             exp_data_test = torch.Tensor(exp_data_test).cuda()
+        else:
+            if is_CNN:
+                exp_data_test = exp_data_deno[model_index]
+                exp_data_test = 1-(2*exp_data_test - 1)
+                exp_data_test = exp_data_test.reshape(1, 1, model_index.shape[0], model_index.shape[1])
+                exp_data_test = torch.Tensor(exp_data_test).cuda()
+            else:
+                exp_data_test = exp_data_deno[model_index.flatten()]
+                exp_data_test = 1-(2*exp_data_test - 1)
+                exp_data_test = exp_data_test.reshape(1, -1)
+                exp_data_test = torch.Tensor(exp_data_test).cuda()
 
         pred = model(exp_data_test)
         pred = pred.detach().cpu().numpy()
