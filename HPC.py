@@ -274,6 +274,7 @@ class HPC_Model():
         self.CUDA_DEVICE, self.N_PULSE, self.IMAGE_WIDTH, self.TIME_RANGE, self.EXISTING_SPINS, \
             self.A_init, self.A_final, self.A_step, self.A_range, self.B_init, self.B_final, \
                 self.noise_scale, self.SAVE_DIR_NAME, self.model_lists, self.target_side_distance, self.is_CNN = args
+        self.time_range_store = self.TIME_RANGE
 
         self.exp_data = np.load('./data/exp_data_{}.npy'.format(self.N_PULSE)).flatten()  # the experimental data to be evalutated
         self.exp_data_deno = np.load('./data/exp_data_{}_deno.npy'.format(self.N_PULSE))  # the denoised experimental data to be evalutated
@@ -295,17 +296,23 @@ class HPC_Model():
         total_A_lists = []
 
         for model_idx, [A_first, A_end, B_first, B_end] in enumerate(self.model_lists):
-            print("========================================================================")
-            print('A_first:{}, A_end:{}, B_first:{}, B_end:{}'.format(A_first, A_end, B_first, B_end))
-            print("========================================================================")
-            A_num = 1
-            B_num = 1
-            A_resol, B_resol = 50, B_end-B_first+500
 
             if (self.N_PULSE==256) & ((A_first >= -10000) & (A_first <= (10000-self.A_range))):
                 B_first = 1500
                 print("B_first is changed to 1500 Hz.")
-
+            else:
+                B_first = 2200
+            if (self.N_PULSE==256) & ((A_first <= -12000) | (A_first >= (12000-self.A_range))):
+                self.TIME_RANGE = 3000
+                print("self.TIME_RANGE is changed to 3000 points.")
+            else:
+                self.TIME_RANGE = self.time_range_store
+            print("========================================================================")
+            print('A_first:{}, A_end:{}, B_first:{}, B_end:{}, Time range:{}'.format(A_first, A_end, B_first, B_end, self.TIME_RANGE))
+            print("========================================================================")
+            A_num = 1
+            B_num = 1
+            A_resol, B_resol = 50, B_end-B_first+500
             A_idx_list = np.arange(A_first, A_end+A_resol, A_num*A_resol)
             if (B_end-B_first)%B_resol==0:
                 B_idx_list = np.arange(B_first, B_end+B_resol, B_num*B_resol)
@@ -358,8 +365,8 @@ class HPC_Model():
 
             TPk_AB_candi, Y_train_arr, _  = gen_TPk_AB_candidates(AB_idx_set, False, *args)
             if self.EXISTING_SPINS:
-                A_existing_margin = 150
-                B_existing_margin = 2500
+                A_existing_margin = 350
+                B_existing_margin = 4000
                 TPk_AB_candi = return_existing_spins_wrt_margins(deno_pred_N32_B15000_above, TPk_AB_candi, A_existing_margin, B_existing_margin)
 
             if (AB_idx_set[-1][0] < -15000) | (AB_idx_set[0][0] > 15000):
@@ -370,7 +377,11 @@ class HPC_Model():
                 for idx in range(len(AB_idx_set)):
                     model_index_temp = get_model_index(self.total_indices, AB_idx_set[idx][0], time_thres_idx=self.TIME_RANGE, image_width=self.IMAGE_WIDTH)
                     temp_list0[idx] = len(model_index_temp)
-                    model_index_temp, removed_index = return_index_without_A_idx(self.total_indices, model_index_temp, 0, self.TIME_RANGE, 5)
+                    _, removed_index = return_index_without_A_idx(self.total_indices, model_index_temp, 0, self.TIME_RANGE, 7)
+                    # for [A,B] in deno_pred_N32_B15000_above:
+                    #     A_temp = return_TPk_from_AB(A, B, WL_VALUE)
+                    #     _, removed_index_temp = return_index_without_A_idx(self.total_indices, model_index_temp, A_temp, self.TIME_RANGE, 5)
+                    #     removed_index += removed_index_temp
                     temp_list1[idx] = len(removed_index)
                     temp_list2.append(removed_index)
                 cut_idx = int(np.min(temp_list0))

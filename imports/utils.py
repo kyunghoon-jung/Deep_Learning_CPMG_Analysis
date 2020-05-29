@@ -545,6 +545,22 @@ def return_index_without_A_idx(total_indices, model_index, A_idx, TIME_RANGE, wi
     model_index = model_index[total_model_indices,:]
     return model_index, remove_index
 
+# return A value of TPk from the input (A, B) candidate
+def return_TPk_from_AB(A: 'Hz', B: 'Hz', WL, k=10) -> "A(Hz)":
+
+    A_temp = int(round(A*0.01)*100)
+    A_list = np.arange(A_temp-15000, A_temp+15000, 50)*2*np.pi
+    A *= 2*np.pi
+    B *= 2*np.pi
+    w_tilda = np.sqrt((A+WL)**2 + B**2)
+    tau = np.pi*(2*k - 1) / (w_tilda + WL)
+    B_ref = 10000*2*np.pi
+    w_tilda_list = np.sqrt((A_list+WL)**2 + B_ref**2)
+    tau_list = np.pi*(2*k - 1) / (w_tilda_list + WL)
+    min_idx = np.argmin(np.abs(tau_list - tau))
+    
+    return int(round(A_list[min_idx]/2/np.pi, 0))
+
 # return HPC_prediction_lists
 def HPC_prediction(model, AB_idx_set, total_indices, time_range, image_width, selected_index, cut_idx, is_removal, exp_data, exp_data_deno, 
                    total_A_lists, total_raw_pred_list, total_deno_pred_list, is_CNN, PRE_PROCESS, PRE_SCALE, save_to_file=False):    
