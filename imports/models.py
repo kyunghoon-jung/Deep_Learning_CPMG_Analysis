@@ -55,9 +55,9 @@ class HPC_hierarchical(nn.Module):
         x = self.sigmoid(self.final(x))
         return x
 
-class Fitting_model(nn.Module):
+class Regression_model(nn.Module):
     def __init__(self, input_features, out_features): 
-        super(Fitting_model, self).__init__()
+        super(Regression_model, self).__init__()
         self.linear1 = nn.Linear(input_features, 2048)  
         self.linear2 = nn.Linear(2048, 2048)
         self.linear3 = nn.Linear(2048, 1024)
