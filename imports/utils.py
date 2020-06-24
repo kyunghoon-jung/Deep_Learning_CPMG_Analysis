@@ -553,7 +553,6 @@ def Y_train_normalization(arr):
         column_min = np.min(arr[:, idx])
         res_arr[:, idx] = (column_max - arr[:, idx]) / (column_max - column_min)
         scale_list.append([column_min, column_max])
-    print(np.array(scale_list).flatten())
     return res_arr, np.array(scale_list).flatten()
 
 # Used in a regression model to recover normalized hyperfine parameters.
