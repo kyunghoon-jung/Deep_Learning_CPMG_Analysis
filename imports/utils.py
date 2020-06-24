@@ -531,6 +531,41 @@ def return_total_hier_index_list(A_list, cut_threshold):
         if len(temp_index) == 0:break 
     return np.array(total_index_lists) 
 
+# Exclude unnecessary indices
+def return_reduced_hier_indices(hier_indices):
+    total_lists = []
+    for temp_line in hier_indices:
+        temp = []
+        for line in temp_line:
+            line.sort()
+            temp.append(list(line))
+        set_lists = set(map(tuple, temp))
+        listed_lists = list(map(list, set_lists))
+        total_lists.append(listed_lists) 
+    return np.array(total_lists) 
+
+# Used in a regression model to nomalize hyperfine parameters. 
+def Y_train_normalization(arr):
+    scale_list = []
+    res_arr = np.zeros((arr.shape))
+    for idx, line in enumerate(range(arr.shape[1])):
+        column_max = np.max(arr[:, idx])
+        column_min = np.min(arr[:, idx])
+        res_arr[:, idx] = (column_max - arr[:, idx]) / (column_max - column_min)
+        scale_list.append([column_min, column_max])
+    print(np.array(scale_list).flatten())
+    return res_arr, np.array(scale_list).flatten()
+
+# Used in a regression model to recover normalized hyperfine parameters.
+def reverse_normalization(pred_res, scale_list):
+    reversed_list = []
+    for idx, pred in enumerate(pred_res):
+        column_min = scale_list[2*idx]
+        column_max = scale_list[2*idx+1]
+        reversed_pred = column_max - pred * (column_max - column_min)
+        reversed_list.append(reversed_pred)
+    return reversed_list
+
 # return indexing array excluding targeted A index ( for example, to exclude the Larmor Frequency index, set A_idx = 0)
 def return_index_without_A_idx(total_indices, model_index, A_idx, TIME_RANGE, width):
     selected_index = get_model_index(total_indices, A_idx, time_thres_idx=TIME_RANGE, image_width=width) 
