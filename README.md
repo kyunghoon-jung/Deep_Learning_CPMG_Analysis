@@ -1,5 +1,5 @@
 # Nuclear spin detection via deep learning models
-### This repository contains the codes in the paper [Link](https://arxiv.org/abs/2006.13478)
+#### This repository contains the codes in the paper [Deep learning enhanced individual nuclear-spin detection](https://arxiv.org/abs/2006.13478)
 
 All datasets is available on request.
 
