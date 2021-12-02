@@ -9,7 +9,7 @@ import time
 import argparse
 np.set_printoptions(suppress=True)
 
-from multiprocessing import Pool 
+from multiprocessing import Pool, allow_connection_pickling 
 POOL_PROCESS = 23  
 FILE_GEN_INDEX = 2 
 pool = Pool(processes=POOL_PROCESS)  
@@ -23,7 +23,7 @@ import itertools
 print("Generation of datasets excuted.", time.asctime())
 tic = time.time()
 
-AB_lists_dic = np.load('./data/AB_target_dic_v4.npy').item()
+AB_lists_dic = np.load('./data/AB_target_dic_v4.npy', allow_pickle=True).item()
 
 PRE_PROCESS = False
 PRE_SCALE = 1
@@ -33,27 +33,28 @@ GYRO_MAGNETIC_RATIO = 1.0705*1000               # Unit: Herts
 WL_VALUE = MAGNETIC_FIELD*GYRO_MAGNETIC_RATIO*2*np.pi 
 parser = argparse.ArgumentParser(description='parameter assign') 
 
-parser.add_argument('-cuda', required=True, type=int, help='choice of cuda device. type: int')
-parser.add_argument('-pulse', required=True, type=int, help='CPMG pulse (N). type: int')
-parser.add_argument('-width', required=True, type=int, help='image width. type: int')
-parser.add_argument('-time', required=True, type=int, help='number of data points used. type: int')
-parser.add_argument('-bmin', required=True, type=int, help='minimum boundary of B (Hz). type: int')
-parser.add_argument('-bmax', required=True, type=int, help='maximum boundary of B (Hz). type: int')
-parser.add_argument('-aint', required=True, type=int, help='initial value of A (Hz) range in the whole model. type: int')
-parser.add_argument('-afinal', required=True, type=int, help='final value of A (Hz) range in the whole model. type: int')
-parser.add_argument('-arange', required=True, type=int, help='coverage range of a model. type: int')
-parser.add_argument('-astep', required=True, type=int, help='distance between each model. type: int')
-parser.add_argument('-noise', required=True, type=float, help='maxmum noise value (scale: M value). type: float')
-parser.add_argument('-path', required=True, type=str, help='name of save directory for prediction files. type: float')
-parser.add_argument('-existspin', required=True, type=int, help='if there is a list of the existing spins = 1, if not = 0 type: int')
+parser.add_argument('-cuda', required=True, type=int, help='choice of cuda device.')
+parser.add_argument('-pulse', required=True, type=int, help='CPMG pulse (N).')
+parser.add_argument('-width', required=True, type=int, help='image width.')
+parser.add_argument('-time', required=True, type=int, help='number of data points used.')
+parser.add_argument('-bmin', required=True, type=int, help='minimum boundary of B (Hz).')
+parser.add_argument('-bmax', required=True, type=int, help='maximum boundary of B (Hz).')
+parser.add_argument('-aint', required=True, type=int, help='initial value of A (Hz) range in the whole model.')
+parser.add_argument('-afinal', required=True, type=int, help='final value of A (Hz) range in the whole model.')
+parser.add_argument('-arange', required=True, type=int, help='coverage range of a model.')
+parser.add_argument('-astep', required=True, type=int, help='distance between each model.')
+parser.add_argument('-noise', required=True, type=float, help='maxmum noise value (scale: M value).')
+parser.add_argument('-path', required=True, type=str, help='name of save directory for prediction files.')
+parser.add_argument('-existspin', required=True, type=int, help='if wanting to include pre-detected spin values == 1, if not == 0')
 '''
 Excution Example) 
-python -cuda 1 -pulse 32 -width 10 -time 7000 -bmin 20000 -bmax 80000 -aint 10000 -afinal 10500 -arange 200 -astep 250 -noise 0.05 -path temp_dir
+python HPC_N32.py -cuda 1 -pulse 32 -width 10 -time 7000 -bmin 20000 -bmax 80000 -aint 10000 -afinal 10500 -arange 200 -astep 250 -noise 0.05 -path temp_dir -existspin 0
 '''
+
 args = parser.parse_args()
 CUDA_DEVICE = args.cuda
 N_PULSE = args.pulse
-total_indices = np.load('./data/total_indices_v4_N{}.npy'.format(N_PULSE)).item() 
+total_indices = np.load('./data/total_indices_v4_N{}.npy'.format(N_PULSE), allow_pickle=True).item() 
 IMAGE_WIDTH = args.width
 TIME_RANGE  = args.time
 EXISTING_SPINS = args.existspin
@@ -76,7 +77,11 @@ model_lists = get_AB_model_lists(A_init, A_final, A_step, A_range, B_init, B_fin
 
 A_existing_margin = 150
 B_existing_margin = 2500
-deno_pred_N32_B15000_above = np.load('./data/predicted_results_N32_B15000above.npy') 
+
+if EXISTING_SPINS: 
+    file_name = ".npy"
+    deno_pred_N32_B15000_above = np.load(f'./data/{}') 
+
 tic = time.time()
 total_raw_pred_list = []
 total_deno_pred_list = []
