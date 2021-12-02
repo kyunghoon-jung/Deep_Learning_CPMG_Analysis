@@ -50,7 +50,7 @@ parser.add_argument('-existspin', required=True, type=int, help='if wanting to i
 Excution Example) 
 python HPC_N32.py -cuda 1 -pulse 32 -width 10 -time 7000 -bmin 20000 -bmax 80000 -aint 10000 -afinal 10500 -arange 200 -astep 250 -noise 0.05 -path temp_dir -existspin 0
 '''
-
+  
 args = parser.parse_args()
 CUDA_DEVICE = args.cuda
 N_PULSE = args.pulse
