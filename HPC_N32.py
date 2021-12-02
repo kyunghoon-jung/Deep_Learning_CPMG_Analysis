@@ -80,12 +80,16 @@ B_existing_margin = 2500
 
 if EXISTING_SPINS: 
     file_name = ".npy"
-    deno_pred_N32_B15000_above = np.load(f'./data/{}') 
+    deno_pred_N32_B15000_above = np.load(f'./data/{file_name}') 
 
 tic = time.time()
 total_raw_pred_list = []
 total_deno_pred_list = []
 total_A_lists = []
+
+selected_index = [0]
+is_removal = False
+is_CNN = False
 
 for model_idx, [A_first, A_end, B_first, B_end] in enumerate(model_lists):
     print("========================================================================")
@@ -201,8 +205,8 @@ for model_idx, [A_first, A_end, B_first, B_end] in enumerate(model_lists):
 
     model.load_state_dict(torch.load(trained_model[0][0])) 
 
-    total_A_lists, total_raw_pred_list, total_deno_pred_list = HPC_prediction(model, AB_idx_set, total_indices, time_range, image_width, cut_idx, exp_data, exp_data_deno, 
-                                                                                total_A_lists, total_raw_pred_list, total_deno_pred_list, save_to_file=False)
+    total_A_lists, total_raw_pred_list, total_deno_pred_list = HPC_prediction(model, AB_idx_set, total_indices, time_range, image_width, selected_index, cut_idx, is_removal, exp_data, exp_data_deno, 
+                                                                                total_A_lists, total_raw_pred_list, total_deno_pred_list, is_CNN, PRE_PROCESS, PRE_SCALE, save_to_file=False)
 
 total_raw_pred_list  = np.array(total_raw_pred_list).T
 total_deno_pred_list = np.array(total_deno_pred_list).T
