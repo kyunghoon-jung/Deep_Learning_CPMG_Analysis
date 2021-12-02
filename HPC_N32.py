@@ -6,6 +6,8 @@ from imports.utils import *
 from imports.models import *
 from imports.adabound import AdaBound 
 import time
+import configparser
+
 import argparse
 np.set_printoptions(suppress=True)
 
@@ -20,58 +22,43 @@ import torch.optim as optim
 from sklearn.utils import shuffle
 import itertools
 
+# Load configuration file
+config = configparser.ConfigParser()
+config.read('./Configs/config.ini')
+config.sections()
+###
+
 print("Generation of datasets excuted.", time.asctime())
 tic = time.time()
 
-AB_lists_dic = np.load('./data/AB_target_dic_v4.npy', allow_pickle=True).item()
-
 PRE_PROCESS = False
 PRE_SCALE = 1
-
 MAGNETIC_FIELD = 403.553                        # # The external magnetic field strength. Unit: Gauss
 GYRO_MAGNETIC_RATIO = 1.0705*1000               # Unit: Herts 
 WL_VALUE = MAGNETIC_FIELD*GYRO_MAGNETIC_RATIO*2*np.pi 
-parser = argparse.ArgumentParser(description='parameter assign') 
-
-parser.add_argument('-cuda', required=True, type=int, help='choice of cuda device.')
-parser.add_argument('-pulse', required=True, type=int, help='CPMG pulse (N).')
-parser.add_argument('-width', required=True, type=int, help='image width.')
-parser.add_argument('-time', required=True, type=int, help='number of data points used.')
-parser.add_argument('-bmin', required=True, type=int, help='minimum boundary of B (Hz).')
-parser.add_argument('-bmax', required=True, type=int, help='maximum boundary of B (Hz).')
-parser.add_argument('-aint', required=True, type=int, help='initial value of A (Hz) range in the whole model.')
-parser.add_argument('-afinal', required=True, type=int, help='final value of A (Hz) range in the whole model.')
-parser.add_argument('-arange', required=True, type=int, help='coverage range of a model.')
-parser.add_argument('-astep', required=True, type=int, help='distance between each model.')
-parser.add_argument('-noise', required=True, type=float, help='maxmum noise value (scale: M value).')
-parser.add_argument('-path', required=True, type=str, help='name of save directory for prediction files.')
-parser.add_argument('-existspin', required=True, type=int, help='if wanting to include pre-detected spin values == 1, if not == 0')
-'''
-Excution Example) 
-python HPC_N32.py -cuda 1 -pulse 32 -width 10 -time 7000 -bmin 20000 -bmax 80000 -aint 10000 -afinal 10500 -arange 200 -astep 250 -noise 0.05 -path temp_dir -existspin 0
-'''
   
-args = parser.parse_args()
-CUDA_DEVICE = args.cuda
-N_PULSE = args.pulse
+CUDA_DEVICE = int(config['Configs']['cuda'])
+N_PULSE = int(config['Configs']['pulse'])
+IMAGE_WIDTH = int(config['Configs']['width']) 
+TIME_RANGE  = int(config['Configs']['time']) 
+EXISTING_SPINS = bool(config['Configs']['existspin']) 
+
+A_init  = int(config['Configs']['aint'])  
+A_final = int(config['Configs']['afinal'])   
+A_step  = int(config['Configs']['astep'])    
+A_range = int(config['Configs']['arange']) 
+B_init  = int(config['Configs']['bmin']) 
+B_final = int(config['Configs']['bmax']) 
+noise_scale = float(config['Configs']['noise']) 
+SAVE_DIR_NAME = str(config['Configs']['path']) 
+
+AB_lists_dic = np.load('./data/AB_target_dic_v4.npy', allow_pickle=True).item()
 total_indices = np.load('./data/total_indices_v4_N{}.npy'.format(N_PULSE), allow_pickle=True).item() 
-IMAGE_WIDTH = args.width
-TIME_RANGE  = args.time
-EXISTING_SPINS = args.existspin
 
 exp_data = np.load('./data/exp_data_{}.npy'.format(N_PULSE)).flatten()  # the experimental data to be evalutated
 exp_data_deno = np.load('./data/exp_data_{}_deno.npy'.format(N_PULSE))  # the denoised experimental data to be evalutated
 time_data = np.load('./data/time_data_{}.npy'.format(N_PULSE))          # the time data for the experimental data to be evalutated
 spin_bath = np.load('./data/spin_bath_M_value_N{}.npy'.format(N_PULSE)) # the spin bath data for the experimental N_PULSE (it is not pre-requisite so one can just ignore this line.)
-
-A_init  = args.aint   
-A_final = args.afinal    
-A_step  = args.astep      
-A_range = args.arange    
-B_init  = args.bmin       
-B_final = args.bmax       
-noise_scale = args.noise  
-SAVE_DIR_NAME = str(args.path)
 
 model_lists = get_AB_model_lists(A_init, A_final, A_step, A_range, B_init, B_final)
 
