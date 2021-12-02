@@ -65,6 +65,7 @@ model_lists = get_AB_model_lists(A_init, A_final, A_step, A_range, B_init, B_fin
 A_existing_margin = 150
 B_existing_margin = 2500
 
+print(EXISTING_SPINS)
 if EXISTING_SPINS: 
     file_name = ".npy"
     deno_pred_N32_B15000_above = np.load(f'./data/{file_name}') 
@@ -106,7 +107,7 @@ for model_idx, [A_first, A_end, B_first, B_end] in enumerate(model_lists):
     time_range = TIME_RANGE
     class_num = A_num*B_num + 1
     cpu_num_for_multi = 20
-    batch_for_multi = 256
+    batch_for_multi = 512
     class_batch = cpu_num_for_multi*batch_for_multi
 
     spin_zero_scale = {'same':0.5, 'side':0.20, 'mid':0.05, 'far':0.05}
@@ -201,6 +202,11 @@ total_deno_pred_list = np.array(total_deno_pred_list).T
 np.save(MODEL_PATH+'total_N{}_A_idx.npy'.format(N_PULSE), total_A_lists)
 np.save(MODEL_PATH+'total_N{}_raw_pred.npy'.format(N_PULSE), total_raw_pred_list)
 np.save(MODEL_PATH+'total_N{}_deno_pred.npy'.format(N_PULSE), total_deno_pred_list)
+
+#### Config save
+with open(f'./Configs/NN_dataset_config_{MODEL_PATH}.ini', 'w') as configfile:
+    config.write(configfile)
+####
 
 print('================================================================')
 print('Training Completed. Parsing parameters as follows.')
