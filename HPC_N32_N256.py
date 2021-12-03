@@ -41,7 +41,7 @@ CUDA_DEVICE = int(config['Configs']['cuda'])
 N_PULSE = int(config['Configs']['pulse'])
 IMAGE_WIDTH = int(config['Configs']['width']) 
 TIME_RANGE  = int(config['Configs']['time']) 
-EXISTING_SPINS = bool(config['Configs']['existspin']) 
+EXISTING_SPINS = int(config['Configs']['existspin']) 
 
 A_init  = int(config['Configs']['aint'])  
 A_final = int(config['Configs']['afinal'])   
@@ -58,14 +58,16 @@ total_indices = np.load('./data/total_indices_v4_N{}.npy'.format(N_PULSE), allow
 exp_data = np.load('./data/exp_data_{}.npy'.format(N_PULSE)).flatten()  # the experimental data to be evalutated
 exp_data_deno = np.load('./data/exp_data_{}_deno.npy'.format(N_PULSE))  # the denoised experimental data to be evalutated
 time_data = np.load('./data/time_data_{}.npy'.format(N_PULSE))          # the time data for the experimental data to be evalutated
-spin_bath = np.load('./data/spin_bath_M_value_N{}.npy'.format(N_PULSE)) # the spin bath data for the experimental N_PULSE (it is not pre-requisite so one can just ignore this line.)
+if N_PULSE == 32:
+    spin_bath = np.load('./data/spin_bath_M_value_N{}.npy'.format(N_PULSE)) # the spin bath data for the experimental N_PULSE (it is not pre-requisite so one can just ignore this line.)
+elif N_PULSE == 256:
+    spin_bath = np.load('./data/spin_bath_M_value_N{}_exp256_timerange.npy'.format(N_PULSE)) # the spin bath data for the experimental N_PULSE (it is not pre-requisite so one can just ignore this line.)
 
 model_lists = get_AB_model_lists(A_init, A_final, A_step, A_range, B_init, B_final)
 
 A_existing_margin = 150
 B_existing_margin = 2500
 
-print(EXISTING_SPINS)
 if EXISTING_SPINS: 
     file_name = ".npy"
     deno_pred_N32_B15000_above = np.load(f'./data/{file_name}') 
@@ -83,7 +85,7 @@ for model_idx, [A_first, A_end, B_first, B_end] in enumerate(model_lists):
     print("========================================================================")
     print('A_first:{}, A_end:{}, B_first:{}, B_end:{}'.format(A_first, A_end, B_first, B_end))
     print("========================================================================")
-    A_num = 1
+    A_num = 2
     B_num = 1
     A_resol, B_resol = 50, B_end-B_first+500
 
@@ -105,7 +107,6 @@ for model_idx, [A_first, A_end, B_first, B_end] in enumerate(model_lists):
 
     image_width = IMAGE_WIDTH 
     time_range = TIME_RANGE
-    class_num = A_num*B_num + 1
     cpu_num_for_multi = 20
     batch_for_multi = 512
     class_batch = cpu_num_for_multi*batch_for_multi
@@ -121,13 +122,13 @@ for model_idx, [A_first, A_end, B_first, B_end] in enumerate(model_lists):
         B_side_min, B_side_max = 6000, 70000
         B_side_gap = 5000
         B_target_gap = 1000
-        distance_btw_target_side = 1000
+        distance_btw_target_side = 250
 
     elif N_PULSE==256:
         B_side_min, B_side_max = 1500, 25000
         B_side_gap = 100  # distance between target and side (applied for both side_same and side)
         B_target_gap = 0  # distance between targets only valid when B_num >= 2.
-        distance_btw_target_side = 375
+        distance_btw_target_side = 300
 
     if ((N_PULSE == 32) & (B_first<12000)):
         PRE_PROCESS = True
@@ -204,7 +205,7 @@ np.save(MODEL_PATH+'total_N{}_raw_pred.npy'.format(N_PULSE), total_raw_pred_list
 np.save(MODEL_PATH+'total_N{}_deno_pred.npy'.format(N_PULSE), total_deno_pred_list)
 
 #### Config save
-with open(f'./Configs/NN_dataset_config_{MODEL_PATH}.ini', 'w') as configfile:
+with open(MODEL_PATH+f'config.ini', 'w') as configfile:
     config.write(configfile)
 ####
 

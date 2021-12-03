@@ -292,8 +292,8 @@ def gen_TPk_AB_candidates(AB_target_set: "[[A1,B1],[A2,B2],..]", is_hierarchical
     The function generates (A,B) candidates with respect to each TPk of 'AB_target_set' variable.
 
     bound_list: the divided ratio w.r.t the range of B. This reflects the fact that the number of nuclear spins in diamond
-                becomes bigger as the distance from the NV center gets longer. 
-                --> therefore, the amount spins with smaller B shoulb be much more than larger B.   
+                becomes bigger as the distance from the NV center becomes longer. 
+                --> therefore, the amount of spins should increase as B increases.   
     '''
     AB_lists_dic, N_PULSE, A_num, B_num, A_resol, B_resol, A_side_num, A_side_resol, B_side_min,\
     B_side_max, B_target_gap, B_side_gap, A_target_margin, A_side_margin, A_far_side_margin,\
