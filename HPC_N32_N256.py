@@ -69,9 +69,14 @@ A_existing_margin = 150
 B_existing_margin = 2500
 
 if EXISTING_SPINS: 
-    file_name = ".npy"
-    deno_pred_N32_B15000_above = np.load(f'./data/{file_name}') 
-
+    print("Include existing spins")
+    deno_pred_N32_B15000_above = np.array([
+                                           [-20738.524397906887, 40421.56414091587],
+                                           [-8043.729442048509, 19196.62602543831],
+                                           [36020.12688619586, 26785.71864962578],
+                                           [11463.297802180363, 57308.602420240],
+                                           [-24492.32775241693, 23001.877063512802]
+                                         ])
 tic = time.time()
 total_raw_pred_list = []
 total_deno_pred_list = []
@@ -111,24 +116,24 @@ for model_idx, [A_first, A_end, B_first, B_end] in enumerate(model_lists):
     batch_for_multi = 512
     class_batch = cpu_num_for_multi*batch_for_multi
 
-    spin_zero_scale = {'same':0.5, 'side':0.20, 'mid':0.05, 'far':0.05}
-
     torch.cuda.set_device(device=CUDA_DEVICE) 
     epochs = 15
     valid_batch = 4096
     valid_mini_batch = 1024
 
     if N_PULSE==32:
+        spin_zero_scale = {'same':0.5, 'side':0.20, 'mid':0.05, 'far':0.05}
         B_side_min, B_side_max = 6000, 70000
         B_side_gap = 5000
         B_target_gap = 1000
         distance_btw_target_side = 250
 
     elif N_PULSE==256:
+        spin_zero_scale = {'same':0.70, 'side':0.25, 'mid':0.05, 'far':0.05}
         B_side_min, B_side_max = 1500, 25000
         B_side_gap = 100  # distance between target and side (applied for both side_same and side)
         B_target_gap = 0  # distance between targets only valid when B_num >= 2.
-        distance_btw_target_side = 300
+        distance_btw_target_side = 200
 
     if ((N_PULSE == 32) & (B_first<12000)):
         PRE_PROCESS = True
